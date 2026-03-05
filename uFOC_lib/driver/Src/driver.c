@@ -10,7 +10,7 @@ uint16_t read_adc_channel(ADC_HandleTypeDef *hadc, uint32_t channel)
     ADC_ChannelConfTypeDef sConfig = {0};
     sConfig.Channel = channel;
     sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_61CYCLES_5; // klidně uprav
+    sConfig.SamplingTime = ADC_SAMPLETIME_61CYCLES_5;
     
     HAL_ADC_ConfigChannel(hadc, &sConfig);
     

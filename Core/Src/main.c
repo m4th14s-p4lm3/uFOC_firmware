@@ -138,9 +138,9 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   
-  // 1) Spusť CH4 (kvůli CC4 eventům)
+  // 1) Start CH4 (CC4 events)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-  // 2) Nastav CC4 do středu periody
+  // 2) Set period mid
   TIM1->CCR4 = TIM1->ARR / 2;
 
 

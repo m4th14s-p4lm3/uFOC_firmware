@@ -17,7 +17,6 @@ encoder_t init_encoder(){
     uint8_t status_out;
     uint32_t new_raw_value = mt6835_read_raw21(&status_out);
     
-    // první vzorek jen inicializuj
     encoder.current_raw_value = new_raw_value;
     encoder.prevous_raw_value = new_raw_value;
     encoder.position_ticks = new_raw_value;
@@ -38,7 +37,6 @@ void update_encoder(encoder_t* encoder){
     
     int32_t delta = (int32_t)encoder->current_raw_value - (int32_t)encoder->prevous_raw_value;
     
-    // unwrap přes modulo
     if (delta > (int32_t)ENC_HALF_MODULO) {
         delta -= (int32_t)ENC_MODULO;
     } else if (delta < -(int32_t)ENC_HALF_MODULO) {
@@ -57,7 +55,7 @@ double encoder_get_turns(const encoder_t* e) {
 uint32_t mt6835_read_raw21(uint8_t *status_out)
 {
     // Burst command (0xA) + start address 0x003
-    // Posíláme 6 bytů: [cmd][addr][dummy][dummy][dummy][dummy]
+    // Sending 6 bytes: [cmd][addr][dummy][dummy][dummy][dummy]
     uint8_t tx[6] = { (uint8_t)(0xA << 4), 0x03, 0x00, 0x00, 0x00, 0x00 };
     uint8_t rx[6] = {0};
 
