@@ -16,8 +16,10 @@ typedef struct {
 
 uint32_t mt6835_read_raw21(uint8_t *status_out);
 
-void measure_encoder(encoder_t* encoder);
+void update_encoder(encoder_t* encoder);
 
 double encoder_get_turns(const encoder_t* e);
+
+encoder_t init_encoder();
 
 #endif

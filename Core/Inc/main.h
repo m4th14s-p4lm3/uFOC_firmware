@@ -61,6 +61,18 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define INLA_Pin GPIO_PIN_0
 #define INLA_GPIO_Port GPIOF
+#define ADC_IN1_sense_c_Pin GPIO_PIN_0
+#define ADC_IN1_sense_c_GPIO_Port GPIOA
+#define ADC1_IN2_sense_b_Pin GPIO_PIN_1
+#define ADC1_IN2_sense_b_GPIO_Port GPIOA
+#define ADC1_IN3_sense_a_Pin GPIO_PIN_2
+#define ADC1_IN3_sense_a_GPIO_Port GPIOA
+#define DRIVER_CS_Pin GPIO_PIN_4
+#define DRIVER_CS_GPIO_Port GPIOA
+#define ENCODER_CS_Pin GPIO_PIN_5
+#define ENCODER_CS_GPIO_Port GPIOA
+#define IMU_CS_Pin GPIO_PIN_6
+#define IMU_CS_GPIO_Port GPIOA
 #define INLC_Pin GPIO_PIN_7
 #define INLC_GPIO_Port GPIOA
 #define INLB_Pin GPIO_PIN_0

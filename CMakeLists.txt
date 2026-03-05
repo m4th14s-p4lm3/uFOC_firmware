@@ -53,6 +53,21 @@ target_sources(encoder PRIVATE uFOC_lib/encoder/Src/encoder.c)
 target_include_directories(encoder PUBLIC uFOC_lib/encoder/Inc)
 target_link_libraries(encoder PUBLIC stm32cubemx)
 
+
+# Driver
+add_library(driver STATIC)
+target_sources(driver PRIVATE uFOC_lib/driver/Src/driver.c)
+target_include_directories(driver PUBLIC uFOC_lib/driver/Inc)
+target_link_libraries(driver PUBLIC stm32cubemx)
+
+# Debug utils
+add_library(debug_utils STATIC)
+target_sources(debug_utils PRIVATE uFOC_lib/debug_utils/Src/debug_utils.c)
+target_include_directories(debug_utils PUBLIC uFOC_lib/debug_utils/Inc)
+target_link_libraries(debug_utils PUBLIC stm32cubemx)
+target_link_libraries(debug_utils PUBLIC stm32cubemx driver)
+
+
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
@@ -72,6 +87,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
     # Add user defined libraries
     encoder
+    driver
+    m
+    
+    debug_utils
 )
 target_link_options(${PROJECT_NAME} PRIVATE
   -u _printf_float

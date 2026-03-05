@@ -12,23 +12,27 @@
 
 extern SPI_HandleTypeDef hspi3;
 
-
-void measure_encoder(encoder_t* encoder){
-    if (!encoder) return;
-    
+encoder_t init_encoder(){
+    encoder_t encoder;
     uint8_t status_out;
     uint32_t new_raw_value = mt6835_read_raw21(&status_out);
     
     // první vzorek jen inicializuj
-    if (!encoder->valid) {
-        encoder->current_raw_value = new_raw_value;
-        encoder->prevous_raw_value = new_raw_value;
-        encoder->position_ticks = new_raw_value;
-        encoder->last_delta = 0;
-        encoder->valid = 1;
-        return;
-    }
+    encoder.current_raw_value = new_raw_value;
+    encoder.prevous_raw_value = new_raw_value;
+    encoder.position_ticks = new_raw_value;
+    encoder.last_delta = 0;
+    encoder.valid = 1;
+    return encoder;
+}
+
+
+void update_encoder(encoder_t* encoder){
+    if (!encoder) return;
     
+    uint8_t status_out;
+    uint32_t new_raw_value = mt6835_read_raw21(&status_out);
+        
     encoder->prevous_raw_value = encoder->current_raw_value;
     encoder->current_raw_value = new_raw_value;
     
@@ -46,7 +50,7 @@ void measure_encoder(encoder_t* encoder){
 }
 
 double encoder_get_turns(const encoder_t* e) {
-    return (double)e->position_ticks / (double)ENC_MODULO;
+    return (double)e->position_ticks / (double)ENC_MODULO - 1;
 }
 
 
@@ -57,10 +61,11 @@ uint32_t mt6835_read_raw21(uint8_t *status_out)
     uint8_t tx[6] = { (uint8_t)(0xA << 4), 0x03, 0x00, 0x00, 0x00, 0x00 };
     uint8_t rx[6] = {0};
 
-    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_RESET); // TAKE SPI
     HAL_SPI_TransmitReceive(&hspi3, tx, rx, sizeof(tx), 100);
-    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET); // RELEASE SPI
 
+    
     // Datasheet: 0x003 = ANGLE[20:13], 0x004 = ANGLE[12:5], 0x005 = ANGLE[4:0] + STATUS[2:0], 0x006 = CRC :contentReference[oaicite:1]{index=1}
     uint32_t raw =
         ((uint32_t)rx[2] << 13) |

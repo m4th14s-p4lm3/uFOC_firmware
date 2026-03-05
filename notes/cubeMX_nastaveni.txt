@@ -1,0 +1,261 @@
+1️⃣ TIM1 – 6PWM pro DRV8316
+Konfigurace
+Mode
+
+Clock Source = Internal Clock
+
+Counter Mode = Center Aligned mode 1
+
+Channel 1 = PWM CH1 + CH1N
+
+Channel 2 = PWM CH2 + CH2N
+
+Channel 3 = PWM CH3 + CH3N
+
+Counter
+
+Prescaler = 0
+
+Period (ARR) = 1800
+
+Auto Reload Preload = Enable
+
+Repetition Counter = 0
+
+Break & Dead Time
+
+Dead Time = 100
+
+OSSR = Enable
+
+OSSI = Enable
+
+Break = Disable (zatím)
+
+PWM kanály
+
+PWM mode 1
+
+CH polarity = High
+
+CHN polarity = High
+
+Output compare preload = Enable
+
+Idle state = Reset
+
+Proč takto?
+Center-aligned
+
+Symetrické PWM
+
+Lepší EMI
+
+Správné pro FOC
+
+Jednodušší synchronizace ADC
+
+ARR = 1800
+
+Při 72 MHz:
+
+f_pwm = 72 MHz / (2 × 1800) = 20 kHz
+
+20 kHz = ideální pro BLDC (nad slyšitelnou oblastí).
+
+Dead time
+
+Zabraňuje shoot-through (současnému sepnutí horního i dolního tranzistoru).
+
+Bez deadtime bys mohl zničit DRV8316.
+
+CH + CHN
+
+Potřebuješ 6 PWM vstupů:
+
+INHA / INLA
+
+INHB / INLB
+
+INHC / INLC
+
+TIM1 advanced timer tohle generuje přímo.
+
+2️⃣ ADC1 – měření proudů
+Mapování pinů
+
+Z pinoutu:
+
+ADC1_IN1 = sense_c (PA0)
+
+ADC1_IN2 = sense_b (PA1)
+
+ADC1_IN3 = sense_a (PA2)
+
+ADC Settings
+
+Resolution = 12-bit
+
+Scan mode = Enable
+
+Continuous mode = Enable
+
+DMA continuous requests = Enable
+
+End of conversion = End of sequence
+
+Overrun = Data overwritten
+
+Regular conversions
+
+Number of conversions = 3
+
+Sequence:
+
+Rank 1 = Channel 1 (sense_c)
+
+Rank 2 = Channel 2 (sense_b)
+
+Rank 3 = Channel 3 (sense_a)
+
+Sampling time:
+
+19.5 nebo 61.5 cycles (ne 1.5)
+
+DMA
+
+Peripheral → Memory
+
+Circular mode
+
+Half-word
+
+Memory increment enable
+
+Proč takto?
+Scan + DMA
+
+Získáš 3 proudy najednou do pole:
+
+adc_raw[0] = iC
+adc_raw[1] = iB
+adc_raw[2] = iA
+
+To je nejjednodušší stabilní varianta na oživení.
+
+Delší sampling time
+
+Proudové měření je citlivé na šum.
+1.5 cycles je příliš agresivní.
+
+3️⃣ SPI – sdílená sběrnice
+Architektura
+
+Používáš:
+
+SPI3 = encoder + driver + IMU
+
+Každé zařízení má vlastní CS:
+
+ENCODER_CS
+
+DRIVER_CS
+
+IMU_CS
+
+SPI2 jsme nepoužili (není potřeba).
+
+SPI3 nastavení
+
+Mode = Full Duplex Master
+
+NSS = Software
+
+Frame format = Motorola
+
+Data size = 8 bit
+
+First bit = MSB first
+
+Baudrate = zpomalené (1–4 Mbit/s)
+
+CPOL/CPHA = podle zařízení (aktuálně Mode 3)
+
+Proč sdílené SPI?
+
+Na schématu jsou SCK/MOSI/MISO sdílené mezi driverem, encoderem i IMU.
+
+Oddělené jsou pouze CS signály.
+
+To je standardní SPI topologie.
+
+4️⃣ GPIO
+DRVOFF
+
+GPIO Output
+
+LOW = driver aktivní
+
+DRIVER_CS / ENCODER_CS / IMU_CS
+
+GPIO Output
+
+default HIGH
+
+aktivní LOW
+
+5️⃣ Celková architektura systému
+Periferie	Účel
+TIM1	6PWM pro driver
+ADC1	proudy A/B/C
+SPI3	encoder + driver + IMU
+CAN	komunikace
+GPIO	CS + DRVOFF
+
+To je správná architektura pro FOC-ready motor controller.
+
+6️⃣ Co je teď systém připraven dělat
+
+Hardware je připraven na:
+
+6-step komutaci
+
+sinusové řízení
+
+FOC s encoderem
+
+proudovou regulaci
+
+CAN komunikaci
+
+Tohle už je reálně plnohodnotný BLDC controller.
+
+7️⃣ Co jsme záměrně zatím NEudělali
+
+ADC synchronizaci na TIM1 (pro FOC)
+
+Injected conversion
+
+Break input ochranu
+
+SPI módovou optimalizaci
+
+Kalibraci proudového offsetu
+
+To je další fáze.
+
+Shrnutí
+
+Teď máš:
+
+Správně nastavený 6PWM timer
+
+Správně nastavené měření 3 proudů
+
+Sdílené SPI s oddělenými CS
+
+Bezpečné deadtime
+
+20 kHz PWM
+
+Tvoje konfigurace je konzistentní a technicky správná.
