@@ -1,6 +1,7 @@
 #include "stm32f3xx_hal.h"
 #include <math.h>
 
+
 extern TIM_HandleTypeDef htim1;
 extern  ADC_HandleTypeDef hadc1;
 
@@ -38,7 +39,12 @@ void pwm_init(){
 
 void pwm_set(float du, float dv, float dw)
 {
-  uint32_t ARR = __HAL_TIM_GET_AUTORELOAD(&htim1);
+  // C B A
+  // Values float du, float dv, float dw must be between 0 and 1 
+  // these values represent percentage of PWM, the real max PWM value
+  // is automaticly handled by ARR variable
+
+  uint32_t ARR = __HAL_TIM_GET_AUTORELOAD(&htim1); // MAX PWM VALUE
 
   if (du < 0) du = 0; if (du > 1) du = 1;
   if (dv < 0) dv = 0; if (dv > 1) dv = 1;
@@ -54,7 +60,7 @@ void open_loop(){
 
   // open-loop parametry
   const float Ts = 0.0001f;
-  const float fe = 360.0f;            // frekvence [Hz] 
+  const float fe = 100.0f;            // frekvence [Hz] 
   const float omega = 2.0f * (float)M_PI * fe;
   const float m = 0.80f;             // modulace (0..~0.9),
 

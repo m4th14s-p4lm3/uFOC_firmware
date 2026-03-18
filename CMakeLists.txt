@@ -68,6 +68,17 @@ target_link_libraries(debug_utils PUBLIC stm32cubemx)
 target_link_libraries(debug_utils PUBLIC stm32cubemx driver)
 
 
+# FOC
+add_library(foc STATIC)
+target_sources(foc PRIVATE uFOC_lib/foc/Src/foc.c)
+target_include_directories(foc PUBLIC uFOC_lib/foc/Inc)
+target_sources(foc PRIVATE uFOC_lib/foc/Src/pi_controller.c)
+target_include_directories(foc PUBLIC uFOC_lib/pi_controller/Inc)
+target_link_libraries(foc PUBLIC stm32cubemx)
+
+
+
+
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
@@ -88,9 +99,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Add user defined libraries
     encoder
     driver
+    debug_utils
+    foc
     m
     
-    debug_utils
 )
 target_link_options(${PROJECT_NAME} PRIVATE
   -u _printf_float

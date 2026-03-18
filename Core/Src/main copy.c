@@ -90,45 +90,6 @@ static void MX_ADC1_Init(void);
 
 // READ SENSE ADC
 volatile uint16_t ia_raw, ib_raw, ic_raw;
-float ia, ib, ic;
-
-float ia_offset = 2045.0f;
-float ic_offset = 2045.0f;
-float ib_offset = 2045.0f;
-
-// float id_ref = 0.0f;
-// float iq_ref = 1.4f;
-
-float va, vb, vc; // Output voltages
-
-encoder_t encoder;
-PIController pi_d;
-PIController pi_q;
-
-
-float magnetic_pairs = 7.0f;
-float electrical_offset = 2.08;
-float theta_e;
-
-void torque_control(float id_ref, float iq_ref){
-  float i_alpha, i_beta;    
-  clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
-  
-  float id, iq;
-  park_transform(i_alpha, i_beta, theta_e, &id, &iq);
-  
-  float err_d = id_ref - id;
-  float err_q = iq_ref - iq;
-  float vd = pi_update(&pi_d, err_d, 0.00005f);
-  float vq = pi_update(&pi_q, err_q, 0.00005f); 
-  // float vd = pi_update(&pi_d, err_d, 0.00001429f);
-  // float vq = pi_update(&pi_q, err_q, 0.00001429f); 
-
-  float v_alpha, v_beta;
-  inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
-  inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
-}
-
 
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -137,20 +98,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     ia_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
     ib_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
     ic_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
-
-    ia = (ia_raw - ia_offset) / 2048.0f;
-    ib = (ib_raw - ib_offset) / 2048.0f;
-    ic = (ic_raw - ic_offset) / 2048.0f;
-
-    
-    // torque_control(0.0f, 1.0f);
-
-
-    // theta_e = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
-
-  }
-
-
+}
 
 
 /* USER CODE END 0 */
@@ -214,17 +162,26 @@ int main(void)
   /* USER CODE END 2 */
   // open_loop();
 
-  
+  encoder_t encoder = init_encoder();
+
+  float ia_offset = 2045.0f;
+  float ic_offset = 2045.0f;
+  float ib_offset = 2045.0f;
+
+  PIController pi_d;
+  PIController pi_q;
+  pi_init(&pi_d, 0.4f, 50.0f, -0.4f, 0.4f);
+  pi_init(&pi_q, 0.4f, 50.0f, -0.4f, 0.4f);
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   
+  float magnetic_pairs = 7.0f;
   char buffer[48];
-  encoder_t encoder = init_encoder();
-  pi_init(&pi_d, 0.4f, 50.0f, -0.4f, 0.4f);
-  pi_init(&pi_q, 0.4f, 50.0f, -0.4f, 0.4f);
+  
 
-
+  float sign = 1.0f;
+  float moment = 0.0f;
 
   while (1)
   {
@@ -233,11 +190,49 @@ int main(void)
 
     update_encoder(&encoder);
 
-    theta_e = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
-    float theta = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
+    float ia = (ia_raw - ia_offset) / 2048.0f;
+    float ib = (ib_raw - ib_offset) / 2048.0f;
+    float ic = (ic_raw - ic_offset) / 2048.0f;
+
+    // sprintf(buffer, "%d %d %d \r\n", ia_raw, ib_raw, ic_raw);
+    // print(buffer); 
+    // HAL_Delay(1);
+
+    // float electrical_offset = 2.08;
+    float electrical_offset = 1.9;
+    // float electrical_offset = 3.6;
+    // float electrical_offset = 0;
+    float theta_e = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
+    float theta = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
+
+    float i_alpha;
+    float i_beta;
+    float id; 
+    float iq;
+    clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
+    park_transform(i_alpha, i_beta, theta_e, &id, &iq);
+    
+    float id_ref = 0.0f;
+    float iq_ref = 1.4f;
+
+    float err_d = id_ref - id;
+    float err_q = iq_ref - iq;
+
+    // float vd = pi_update(&pi_d, err_d, 0.00001429f);
+    // float vq = pi_update(&pi_q, err_q, 0.00001429f);
+    float vd = pi_update(&pi_d, err_d, 0.00005f);
+    float vq = pi_update(&pi_q, err_q, 0.00005f);
 
 
-    torque_control(0.0f, 0.6);
+    float v_alpha;
+    float v_beta;
+    float va;
+    float vb;
+    float vc;
+
+    inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
+    inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
+    
 
 
     float du = 0.5f + va;
@@ -253,12 +248,7 @@ int main(void)
     if (dw < 0.05f) dw = 0.05f;
     if (dw > 0.95f) dw = 0.95f;
 
-    // pwm_set(du, dv, dw);
-
-
-
-
-
+    pwm_set(du, dv, dw);
 
 
     // if (encoder_get_turns(&encoder) >= 10){
@@ -276,10 +266,8 @@ int main(void)
 
     
     // sprintf(buffer, "%f %f %f \r\n", du, dv, dw);
-    // sprintf(buffer, "%f \r\n", -theta*7.0f); // electrical_offset
+    sprintf(buffer, "%f \r\n", -theta*7.0f); // electrical_offset
     // sprintf(buffer, "%f \r\n", encoder_get_turns(&encoder)); // electrical_offset
-    // sprintf(buffer, "%f \r\n", torque); // electrical_offset
-    sprintf(buffer, "%f %f %f \r\n", ia*100, ib*100, ic*100);
     print(buffer);
 
  

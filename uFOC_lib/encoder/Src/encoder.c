@@ -48,7 +48,7 @@ void update_encoder(encoder_t* encoder){
 }
 
 double encoder_get_turns(const encoder_t* e) {
-    return (double)e->position_ticks / (double)ENC_MODULO - 1;
+    return (double)e->position_ticks / (double)ENC_MODULO;
 }
 
 
