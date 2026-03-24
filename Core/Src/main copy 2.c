@@ -106,6 +106,14 @@ volatile PIController pi_d;
 volatile PIController pi_q;
 
 
+// volatile float magnetic_pairs = 11.0f;
+volatile float magnetic_pairs = 22.0f;
+volatile  float electrical_offset = 0.08f;
+// volatile  float electrical_offset = 1.6508f;
+// volatile  float electrical_offset = 3.2216f;
+// volatile  float electrical_offset = 4.7924f;
+// volatile  float electrical_offset = 0.0f;
+// volatile  float electrical_offset = 0.0f;
 volatile  float theta_e;
 
 volatile float id, iq;
@@ -121,6 +129,8 @@ void torque_control(float id_ref, float iq_ref){
   err_q = iq_ref - iq;
   float vd = pi_update(&pi_d, err_d, 0.000025f);
   float vq = pi_update(&pi_q, err_q, 0.000025f); 
+  // float vd = pi_update(&pi_d, err_d, 0.00001429f);
+  // float vq = pi_update(&pi_q, err_q, 0.00001429f); 
 
   float v_alpha, v_beta;
   inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
@@ -159,64 +169,92 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     // pwm_set(du, dv, dw);
 
   }
+
+  // ------- < CAN COMUNICATION > ----------- 
   CAN_TxHeaderTypeDef txHeader;
   // uint8_t txData[8] = {1,2,3,4,5,6,7,8};
   uint32_t txMailbox;
+  
+  CAN_RxHeaderTypeDef rxHeader;
+  uint8_t rxData[8];
+  
+  void CAN_Filter_Init(void){
+      CAN_FilterTypeDef filter;
+  
+      filter.FilterBank = 0;
+      filter.FilterMode = CAN_FILTERMODE_IDMASK;
+      filter.FilterScale = CAN_FILTERSCALE_32BIT;
+      filter.FilterIdHigh = 0x0000;
+      filter.FilterIdLow = 0x0000;
+      filter.FilterMaskIdHigh = 0x0000;
+      filter.FilterMaskIdLow = 0x0000;
+      filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+      filter.FilterActivation = ENABLE;
+  
+      HAL_CAN_ConfigFilter(&hcan, &filter);
+  }
 
   void can_init_and_start(void)
-{
-    CAN_FilterTypeDef filter = {0};
+  {
+      CAN_Filter_Init();
 
-    filter.FilterBank = 0;
-    filter.FilterMode = CAN_FILTERMODE_IDMASK;
-    filter.FilterScale = CAN_FILTERSCALE_32BIT;
-    filter.FilterIdHigh = 0x0000;
-    filter.FilterIdLow = 0x0000;
-    filter.FilterMaskIdHigh = 0x0000;
-    filter.FilterMaskIdLow = 0x0000;
-    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    filter.FilterActivation = ENABLE;
+      if (HAL_CAN_Start(&hcan) != HAL_OK)
+      {
+          print("CAN start failed\r\n");
+          return;
+      }
 
-    if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
-        print("CAN filter config failed\r\n");
-        return;
-    }
+      if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK)
+      {
+          print("CAN notification failed\r\n");
+          return;
+      }
 
-    if (HAL_CAN_Start(&hcan) != HAL_OK) {
-        print("CAN start failed\r\n");
-        return;
-    }
+      print("CAN started\r\n");
+  }
 
-    print("CAN started\r\n");
-}
 
   void can_send_test(void)
+  {
+      uint8_t txData[2] = {1, 2};
+
+      txHeader.StdId = 0x123;
+      txHeader.ExtId = 0;
+      txHeader.IDE = CAN_ID_STD;
+      txHeader.RTR = CAN_RTR_DATA;
+      txHeader.DLC = 2;
+      txHeader.TransmitGlobalTime = DISABLE;
+
+      HAL_StatusTypeDef st = HAL_CAN_AddTxMessage(&hcan, &txHeader, txData, &txMailbox);
+
+      if (st != HAL_OK)
+      {
+          print("CAN TX failed\r\n");
+      }
+  }
+
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan_ptr)
 {
-    txHeader.StdId = 0x123;
-    txHeader.ExtId = 0;
-    txHeader.IDE = CAN_ID_STD;
-    txHeader.RTR = CAN_RTR_DATA;
-    txHeader.DLC = 8;
-    txHeader.TransmitGlobalTime = DISABLE;
+    if (HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO0, &rxHeader, rxData) == HAL_OK)
+    {
+        char buf[128];
+        int n = snprintf(buf, sizeof(buf), "RX ID=0x%03lX DLC=%d DATA=",
+                         rxHeader.StdId, rxHeader.DLC);
+        print(buf);
 
-    uint8_t txData[8] = {1,2,3,4,5,6,7,8};
+        for (uint8_t i = 0; i < rxHeader.DLC; i++)
+        {
+            snprintf(buf, sizeof(buf), "%02X ", rxData[i]);
+            print(buf);
+        }
 
-    HAL_StatusTypeDef st = HAL_CAN_AddTxMessage(&hcan, &txHeader, txData, &txMailbox);
-
-    if (st != HAL_OK) {
-        char msg[128];
-        snprintf(msg, sizeof(msg),
-                 "CAN TX ERR st=%d ESR=0x%08" PRIX32 " TSR=0x%08" PRIX32 "\r\n",
-                 st, hcan.Instance->ESR, hcan.Instance->TSR);
-        print(msg);
-    } else {
-        char msg[128];
-        snprintf(msg, sizeof(msg),
-                 "CAN TX OK mailbox=%" PRIu32 " ESR=0x%08" PRIX32 " TSR=0x%08" PRIX32 "\r\n",
-                 txMailbox, hcan.Instance->ESR, hcan.Instance->TSR);
-        print(msg);
+        print("\r\n");
     }
 }
+
+  // ------- < / CAN COMUNICATION > ----------- 
+
+
 
 /* USER CODE END 0 */
 
@@ -300,8 +338,8 @@ int main(void)
   can_init_and_start();
   while (1)
   {
-    can_send_test();
-    HAL_Delay(100);
+    // can_send_test();
+    // HAL_Delay(100);
     // continue;
     /* USER CODE END WHILE */
     // print_adc_input();
@@ -482,21 +520,9 @@ static void MX_CAN_Init(void)
   /* USER CODE BEGIN CAN_Init 1 */
 
   /* USER CODE END CAN_Init 1 */
-  // hcan.Instance = CAN;
-  // hcan.Init.Prescaler = 16;
-  // hcan.Init.Mode = CAN_MODE_NORMAL;
-  // hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  // hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  // hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
-  // hcan.Init.TimeTriggeredMode = DISABLE;
-  // hcan.Init.AutoBusOff = DISABLE;
-  // hcan.Init.AutoWakeUp = DISABLE;
-  // hcan.Init.AutoRetransmission = DISABLE;
-  // hcan.Init.ReceiveFifoLocked = DISABLE;
-  // hcan.Init.TransmitFifoPriority = DISABLE;
   
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 4;
+  hcan.Init.Prescaler = 2;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
   hcan.Init.TimeSeg1 = CAN_BS1_13TQ;

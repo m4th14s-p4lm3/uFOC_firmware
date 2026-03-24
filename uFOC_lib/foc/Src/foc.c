@@ -20,19 +20,19 @@ void inv_clarke_transform(float v_alpha, float v_beta,
 
 void park_transform(float i_alpha, float i_beta, float theta,
                     float *id, float *iq){
-    float cg = cosf(theta);
-    float sg = sinf(theta);
+    float ct = cosf(theta);
+    float st = sinf(theta);
 
-    *id =  i_alpha * cg + i_beta * sg;
-    *iq = -i_alpha * sg + i_beta * cg;
+    *id =  i_alpha * ct + i_beta * st;
+    *iq = -i_alpha * st + i_beta * ct;
 }
 
 void inv_park_transform(float vd, float vq, float theta,
                         float *v_alpha, float *v_beta)
 {
-    float cg = cosf(theta);
-    float sg = sinf(theta);
+    float ct = cosf(theta);
+    float st = sinf(theta);
 
-    *v_alpha = vd * cg - vq * sg;
-    *v_beta  = vd * sg + vq * cg;
+    *v_alpha = vd * ct - vq * st;
+    *v_beta  = vd * st + vq * ct;
 }

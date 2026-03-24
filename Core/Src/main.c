@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "stm32f3xx_hal.h"
 #include "string.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -35,10 +36,26 @@
 #include "debug_utils.h"
 #include "pi_controller.h"
 
+#include "communication.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+static drv8316_config_t g_drv_cfg = {
+    .pwm_mode = DRV8316_PWM_MODE_6X,
+    .slew = DRV8316_SLEW_50V_PER_US,
+    .csa_gain = DRV8316_CSA_GAIN_0V30_PER_A,
+    .sdo_push_pull = true,
+    .enable_asr = false,
+    .enable_aar = false,
+    .clear_faults_on_init = true,
+    .lock_registers_after_init = false,
+    .verify_after_write = true,
+};
+
+static driver_current_offsets_t g_current_offsets = {0};
+static driver_phase_currents_t g_phase_currents = {0};
 
 /* USER CODE END PTD */
 
@@ -64,6 +81,7 @@ CRC_HandleTypeDef hcrc;
 SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim6;
 
 UART_HandleTypeDef huart1;
 
@@ -81,6 +99,7 @@ static void MX_CRC_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -90,67 +109,113 @@ static void MX_ADC1_Init(void);
 
 // READ SENSE ADC
 volatile uint16_t ia_raw, ib_raw, ic_raw;
-float ia, ib, ic;
+volatile float ia, ib, ic;
 
-float ia_offset = 2045.0f;
-float ic_offset = 2045.0f;
-float ib_offset = 2045.0f;
-
-// float id_ref = 0.0f;
-// float iq_ref = 1.4f;
-
-float va, vb, vc; // Output voltages
-
+// Update encoder in timer interrupt (TIM6)
 encoder_t encoder;
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM6) {
+        update_encoder(&encoder);
+        // char buffer[64];
+        // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
+        // print(buffer);
+    }
+}
+
+
+volatile bool foc_enabled = false;
 PIController pi_d;
 PIController pi_q;
+float va, vb, vc;
+float id_ref = 0.0f;
+float iq_ref = 0.0f;
 
-
-float magnetic_pairs = 7.0f;
-float electrical_offset = 2.08;
-float theta_e;
-
-void torque_control(float id_ref, float iq_ref){
+void torque_control(float id_ref, float iq_ref, float theta_e){
   float i_alpha, i_beta;    
   clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
-  
   float id, iq;
   park_transform(i_alpha, i_beta, theta_e, &id, &iq);
   
   float err_d = id_ref - id;
   float err_q = iq_ref - iq;
-  float vd = pi_update(&pi_d, err_d, 0.00005f);
-  float vq = pi_update(&pi_q, err_q, 0.00005f); 
-  // float vd = pi_update(&pi_d, err_d, 0.00001429f);
-  // float vq = pi_update(&pi_q, err_q, 0.00001429f); 
+  
+  float vd = pi_update(&pi_d, err_d, 0.00005625f);
+  float vq = pi_update(&pi_q, err_q, 0.00005625f); 
 
   float v_alpha, v_beta;
   inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
   inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 }
 
-
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc->Instance != ADC1) return;
-
-    ia_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
+    ic_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
     ib_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
-    ic_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
+    ia_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
+    driver_phase_currents_from_adc(&g_phase_currents,
+                               ia_raw,
+                               ib_raw,
+                               ic_raw,
+                               &g_current_offsets,
+                               g_drv_cfg.csa_gain);
 
-    ia = (ia_raw - ia_offset) / 2048.0f;
-    ib = (ib_raw - ib_offset) / 2048.0f;
-    ic = (ic_raw - ic_offset) / 2048.0f;
+    ia = g_phase_currents.a;
+    ib = g_phase_currents.b;
+    ic = g_phase_currents.c;
+    if (foc_enabled){
+    // FOC control loop
+      float theta_e = encoder.electrical_angle;
+      torque_control(id_ref, iq_ref, -theta_e);
+      // float v_alpha, v_beta;
+      // inv_park_transform(id_ref, iq_ref, -theta_e, &v_alpha, &v_beta);
+      // inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 
-    
-    // torque_control(0.0f, 1.0f);
+      float du = 0.5f + va;
+      float dv = 0.5f + vb;
+      float dw = 0.5f + vc;
+      pwm_set(du, dv, dw);
 
-
-    // theta_e = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
+    }
 
   }
 
+  // ------- < CAN COMUNICATION > ----------- 
+  void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
+      communication_rx_fifo0_pending_callback(hcan);
+  }
+  // ------- < / CAN COMUNICATION > ----------- 
 
+  void calibrate_electrical_offset(encoder_t* encoder){
+      if (!encoder) return;
+
+      float m = 0.3f;
+
+      float du = 0.5f + 0.5f * m * sinf(0.0f);
+      // float dv = 0.5f + 0.5f * m * sinf(-2.0f * M_PI / 3.0f);
+      // float dw = 0.5f + 0.5f * m * sinf(-4.0f * M_PI / 3.0f);
+      float dv = 0.5f + 0.5f * m * sinf(2.0f * M_PI / 3.0f);
+      float dw = 0.5f + 0.5f * m * sinf(4.0f * M_PI / 3.0f);
+
+      pwm_set(du, dv, dw);
+      HAL_Delay(500);
+
+      uint64_t sum = 0;
+      for (int i = 0; i < 200; i++) {
+          sum += encoder->current_raw_value;
+          HAL_Delay(2);
+      }
+
+      uint32_t mech_raw_aligned = (uint32_t)(sum / 200);
+      uint32_t mech_elec_raw =
+          (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
+
+      update_electrical_offset(encoder, mech_elec_raw);
+      update_encoder(encoder);
+
+      pwm_set(0.5f, 0.5f, 0.5f);
+  }
 
 
 /* USER CODE END 0 */
@@ -164,23 +229,23 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   /* USER CODE END 1 */
-  
+
   /* MCU Configuration--------------------------------------------------------*/
-  
+
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
-  
+
   /* USER CODE BEGIN Init */
   
   /* USER CODE END Init */
-  
+
   /* Configure the system clock */
   SystemClock_Config();
-  
+
   /* USER CODE BEGIN SysInit */
   
   /* USER CODE END SysInit */
-  
+
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
@@ -190,106 +255,201 @@ int main(void)
   MX_TIM1_Init();
   MX_SPI3_Init();
   MX_ADC1_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   
+
+  encoder = init_encoder(11, 0);
+  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
+    Error_Handler();
+  }
+
+  // float p = 0.11f;
+  // float k = 5.088f;
+  float p = 0.57f;
+  float k = 153.088f;
+  float out_min = -0.7f;
+  float out_max = 0.7f;
+  pi_init(&pi_d, p, k, out_min, out_max);
+  pi_init(&pi_q, p, k, out_min, out_max);
+  
+  char buffer[128];
   // 1) Start CH4 (CC4 events)
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   // 2) Set period mid
   TIM1->CCR4 = TIM1->ARR / 2;
-
-
-  // 3) Kalibrace + armnutí injected ADC + interrupt
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADCEx_InjectedStart_IT(&hadc1);
-
-
+  
   pwm_init();
-
-  pwm_set(0, 0, 0);
-
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   
-  // Enable main output (TIM1 needs it)
-  __HAL_TIM_MOE_ENABLE(&htim1);
+  print("Booting...\r\n");
   
-  /* USER CODE END 2 */
-  // open_loop();
-
+  // drv8316_init(&g_drv_cfg);
+  // if (drv8316_init(&g_drv_cfg) != HAL_OK) {
+  //   Error_Handler();
+  // }
   
-
+  // DEBUG: Read DRV8316 status registers
+  drv8316_status_t drv_status = {0};
+  if (drv8316_read_status(&drv_status) != HAL_OK) {
+        print("DRV status read failed\r\n");
+    } else {
+          sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
+            drv_status.ic_status,
+            drv_status.status1,
+            (uint8_t)(drv_status.status2 & 0x7F));
+          print(buffer);
+      }
+      if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
+      if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
+      if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
+      if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
+      if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
+      if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
+      
+      
+      
+      
+      if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
+        Error_Handler();
+      }
+      
+      // Enable main output (TIM1 needs it)
+      __HAL_TIM_MOE_ENABLE(&htim1);
+      
+      if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK) {
+        Error_Handler();
+      }
+      
+      /* motor bez buzení */
+      pwm_set(0.5f, 0.5f, 0.5f);
+      HAL_Delay(20);
+      
+      // Calibrate current sensor offsets
+      if (driver_current_calibrate_offsets(&g_current_offsets,
+        &ia_raw,
+        &ib_raw,
+        &ic_raw,
+        256,
+        1) != HAL_OK) {
+          Error_Handler();
+        }
+        // Debug print current offsets
+        // sprintf(buffer, "offs A=%u B=%u C=%u valid=%u\r\n",
+        //   g_current_offsets.a,
+        //   g_current_offsets.b,
+        //   g_current_offsets.c,
+        //   g_current_offsets.valid ? 1 : 0);
+        // print(buffer);
+        
+        calibrate_electrical_offset(&encoder);
+        sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
+                (unsigned long)encoder.electrical_offset,
+                encoder.electrical_angle);
+        print(buffer);
+        
+        /* USER CODE END 2 */
+        
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   
-  char buffer[48];
-  encoder_t encoder = init_encoder();
-  pi_init(&pi_d, 0.4f, 50.0f, -0.4f, 0.4f);
-  pi_init(&pi_q, 0.4f, 50.0f, -0.4f, 0.4f);
+  // open_loop();
+    
+
+  
+
+  // ---- < Can communication > ----
+  communication_init(&hcan);
+  communication_start();
+  can_message_t msg;
+  // ---- < /Can communication > ----
+
+  foc_enabled = true;
+
+  print("Entering main loop\r\n");  
+  while (1){
 
 
 
-  while (1)
-  {
+    // float theta_e = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
+    // pwm_set(0.0f, 0.0f, 0.0f);
+    
+    // // sprintf(buffer, "%d %d %d\r\n", ia_raw, ib_raw, ic_raw);
+    // sprintf(buffer, "%f %f %f\r\n", ia, ib, ic);
+    // // sprintf(buffer, "%f\r\n", ia + ib + ic);
+    // update_encoder(&encoder);
+    // sprintf(buffer, "%f\r\n", encoder.electrical_angle);
+    
+    // sprintf(buffer, "%f\r\n", encoder.electrical_angle);
+    // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
+    // print(buffer);
+    // HAL_Delay(10);
+
+    // // CAN COMUNICATION 
+    if (communication_read(&msg))
+    {
+
+      // msg.id
+      // msg.dlc
+      // msg.data[0..msg.dlc-1]
+      switch(msg.id){
+        case SET_P:
+          memcpy(&p, msg.data, sizeof(float));
+          sprintf(buffer, "Setting p to %f \r\n", p);
+          print(buffer);
+          pi_init(&pi_d, p, k, out_min, out_max);
+          pi_init(&pi_q, p, k, out_min, out_max);
+          break;
+        case SET_K:
+          memcpy(&k, msg.data, sizeof(float));
+          sprintf(buffer, "Setting k to %f \r\n", k);
+          print(buffer);
+          pi_init(&pi_d, p, k, out_min, out_max);
+          pi_init(&pi_q, p, k, out_min, out_max);
+          break;
+        case SET_MIN:
+          memcpy(&out_min, msg.data, sizeof(float));
+          sprintf(buffer, "Setting out_min to %f \r\n", out_min);
+          print(buffer);
+          pi_init(&pi_d, p, k, out_min, out_max);
+          pi_init(&pi_q, p, k, out_min, out_max);
+          break;
+        case SET_MAX:
+          memcpy(&out_max, msg.data, sizeof(float));
+          sprintf(buffer, "Setting out_max to %f \r\n", out_max);
+          print(buffer);
+          pi_init(&pi_d, p, k, out_min, out_max);
+          pi_init(&pi_q, p, k, out_min, out_max);
+          break;
+        // case SET_ELECTRICAL_OFFSET:
+        //   memcpy(&electrical_offset, msg.data, sizeof(float));
+        //   sprintf(buffer, "Setting electrical_offset to %f \r\n", electrical_offset);
+        //   print(buffer);
+        //   break;
+        case SET_ID_REF:
+          memcpy(&id_ref, msg.data, sizeof(float));
+          sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
+          print(buffer);
+          break;
+        case SET_IQ_REF:
+          memcpy(&iq_ref, msg.data, sizeof(float));
+          sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+          print(buffer);
+          break;
+
+        default:
+          print("Unknown command");
+      }
+    }
+  
+
+  }
+    
+    
     /* USER CODE END WHILE */
-    // print_adc_input();
-
-    update_encoder(&encoder);
-
-    theta_e = -(((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
-    float theta = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
-
-
-    torque_control(0.0f, 0.6);
-
-
-    float du = 0.5f + va;
-    float dv = 0.5f + vb;
-    float dw = 0.5f + vc;
-
-    if (du < 0.05f) du = 0.05f;
-    if (du > 0.95f) du = 0.95f;
-
-    if (dv < 0.05f) dv = 0.05f;
-    if (dv > 0.95f) dv = 0.95f;
-
-    if (dw < 0.05f) dw = 0.05f;
-    if (dw > 0.95f) dw = 0.95f;
-
-    // pwm_set(du, dv, dw);
-
-
-
-
-
-
-
-    // if (encoder_get_turns(&encoder) >= 10){
-    //   pwm_set(0, 0, 0);
-    //   sign *= -1.0f;
-    //   moment = 0.1f;
-    //   // break;
-    // }
-    // else if (encoder_get_turns(&encoder) <= -10){
-    //   pwm_set(0, 0, 0);
-    //   sign *= -1.0f;
-    //   moment = 0.1f;
-    // }
-      // pwm_set();
-
-    
-    // sprintf(buffer, "%f %f %f \r\n", du, dv, dw);
-    // sprintf(buffer, "%f \r\n", -theta*7.0f); // electrical_offset
-    // sprintf(buffer, "%f \r\n", encoder_get_turns(&encoder)); // electrical_offset
-    // sprintf(buffer, "%f \r\n", torque); // electrical_offset
-    sprintf(buffer, "%f %f %f \r\n", ia*100, ib*100, ic*100);
-    print(buffer);
-
- 
-    
 
     /* USER CODE BEGIN 3 */
-    /* USER CODE END 3 */
-  }
+  /* USER CODE END 3 */
 }
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -450,15 +610,15 @@ static void MX_CAN_Init(void)
 
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 16;
+  hcan.Init.Prescaler = 2;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
-  hcan.Init.AutoRetransmission = DISABLE;
+  hcan.Init.AutoRetransmission = ENABLE;
   hcan.Init.ReceiveFifoLocked = DISABLE;
   hcan.Init.TransmitFifoPriority = DISABLE;
   if (HAL_CAN_Init(&hcan) != HAL_OK)
@@ -565,7 +725,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_CENTERALIGNED1;
-  htim1.Init.Period = 400;
+  htim1.Init.Period = 900;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -631,6 +791,44 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 5; // 31, 5
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
 
 }
 

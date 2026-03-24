@@ -23,11 +23,39 @@ void pi_reset(PIController *pi)
 
 float pi_update(PIController *pi, float error, float dt)
 {
-    pi->integral += pi->ki * error * dt;
-    pi->integral = clampf(pi->integral, pi->out_min, pi->out_max);
+    float p = pi->kp * error;
+    float i_new = pi->integral + pi->ki * dt * error;
+    float u = p + i_new;
 
-    float output = pi->kp * error + pi->integral;
-    output = clampf(output, pi->out_min, pi->out_max);
+    if (u > pi->out_max) {
+        if (error < 0.0f) {
+            pi->integral = i_new;
+        }
+        return pi->out_max;
+    }
 
-    return output;
+    if (u < pi->out_min) {
+        if (error > 0.0f) {
+            pi->integral = i_new;
+        }
+        return pi->out_min;
+    }
+
+    pi->integral = i_new;
+    return u;
 }
+
+
+
+// float pi_update(PIController *pi, float error, float dt)
+// {
+//     float xlim = pi->out_max;
+//     int wup = (error > -xlim && error < xlim) ? 1 : 0;
+
+//     pi->integral += wup * pi->ki * dt * error;
+
+//     float output = pi->kp * error + pi->integral;
+//     output = clampf(output, -xlim, xlim);
+
+//     return output;
+// }

@@ -77,6 +77,14 @@ target_include_directories(foc PUBLIC uFOC_lib/pi_controller/Inc)
 target_link_libraries(foc PUBLIC stm32cubemx)
 
 
+add_library(communication STATIC)
+target_sources(communication PRIVATE uFOC_lib/communication/Src/communication.c)
+target_include_directories(communication PUBLIC uFOC_lib/communication/Inc)
+target_sources(communication PRIVATE uFOC_lib/communication/Src/communication.c)
+target_include_directories(communication PUBLIC uFOC_lib/communication/Inc)
+target_link_libraries(communication PUBLIC stm32cubemx)
+
+
 
 
 # Add include paths
@@ -97,6 +105,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    communication
     encoder
     driver
     debug_utils

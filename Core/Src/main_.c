@@ -90,43 +90,6 @@ static void MX_ADC1_Init(void);
 
 // READ SENSE ADC
 volatile uint16_t ia_raw, ib_raw, ic_raw;
-volatile float ia, ib, ic;
-
-volatile float ia_offset = 2045.0f;
-volatile float ic_offset = 2045.0f;
-volatile float ib_offset = 2045.0f;
-
-// float id_ref = 0.0f;
-// float iq_ref = 1.4f;
-
-volatile float va, vb, vc; // Output voltages
-
-volatile encoder_t encoder;
-volatile PIController pi_d;
-volatile PIController pi_q;
-
-
-volatile  float theta_e;
-
-volatile float id, iq;
-volatile float err_d, err_q;
-
-void torque_control(float id_ref, float iq_ref){
-  float i_alpha, i_beta;    
-  clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
-  
-  park_transform(i_alpha, i_beta, theta_e, &id, &iq);
-  
-  err_d = id_ref - id;
-  err_q = iq_ref - iq;
-  float vd = pi_update(&pi_d, err_d, 0.000025f);
-  float vq = pi_update(&pi_q, err_q, 0.000025f); 
-
-  float v_alpha, v_beta;
-  inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
-  inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
-}
-
 
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -135,88 +98,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     ia_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
     ib_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
     ic_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
-
-    ia = (ia_raw - ia_offset) / 2048.0f;
-    ib = (ib_raw - ib_offset) / 2048.0f;
-    ic = (ic_raw - ic_offset) / 2048.0f;
-
-
-    torque_control(0.0f, 0.3f);
-    
-    float du = 0.5f + va;
-    float dv = 0.5f + vb;
-    float dw = 0.5f + vc;
-
-    if (du < 0.05f) du = 0.05f;
-    if (du > 0.95f) du = 0.95f;
-
-    if (dv < 0.05f) dv = 0.05f;
-    if (dv > 0.95f) dv = 0.95f;
-
-    if (dw < 0.05f) dw = 0.05f;
-    if (dw > 0.95f) dw = 0.95f;
-
-    // pwm_set(du, dv, dw);
-
-  }
-  CAN_TxHeaderTypeDef txHeader;
-  // uint8_t txData[8] = {1,2,3,4,5,6,7,8};
-  uint32_t txMailbox;
-
-  void can_init_and_start(void)
-{
-    CAN_FilterTypeDef filter = {0};
-
-    filter.FilterBank = 0;
-    filter.FilterMode = CAN_FILTERMODE_IDMASK;
-    filter.FilterScale = CAN_FILTERSCALE_32BIT;
-    filter.FilterIdHigh = 0x0000;
-    filter.FilterIdLow = 0x0000;
-    filter.FilterMaskIdHigh = 0x0000;
-    filter.FilterMaskIdLow = 0x0000;
-    filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    filter.FilterActivation = ENABLE;
-
-    if (HAL_CAN_ConfigFilter(&hcan, &filter) != HAL_OK) {
-        print("CAN filter config failed\r\n");
-        return;
-    }
-
-    if (HAL_CAN_Start(&hcan) != HAL_OK) {
-        print("CAN start failed\r\n");
-        return;
-    }
-
-    print("CAN started\r\n");
 }
 
-  void can_send_test(void)
-{
-    txHeader.StdId = 0x123;
-    txHeader.ExtId = 0;
-    txHeader.IDE = CAN_ID_STD;
-    txHeader.RTR = CAN_RTR_DATA;
-    txHeader.DLC = 8;
-    txHeader.TransmitGlobalTime = DISABLE;
-
-    uint8_t txData[8] = {1,2,3,4,5,6,7,8};
-
-    HAL_StatusTypeDef st = HAL_CAN_AddTxMessage(&hcan, &txHeader, txData, &txMailbox);
-
-    if (st != HAL_OK) {
-        char msg[128];
-        snprintf(msg, sizeof(msg),
-                 "CAN TX ERR st=%d ESR=0x%08" PRIX32 " TSR=0x%08" PRIX32 "\r\n",
-                 st, hcan.Instance->ESR, hcan.Instance->TSR);
-        print(msg);
-    } else {
-        char msg[128];
-        snprintf(msg, sizeof(msg),
-                 "CAN TX OK mailbox=%" PRIu32 " ESR=0x%08" PRIX32 " TSR=0x%08" PRIX32 "\r\n",
-                 txMailbox, hcan.Instance->ESR, hcan.Instance->TSR);
-        print(msg);
-    }
-}
 
 /* USER CODE END 0 */
 
@@ -279,44 +162,99 @@ int main(void)
   /* USER CODE END 2 */
   // open_loop();
 
-  
+  encoder_t encoder = init_encoder();
+
+  float ia_offset = 2045.0f;
+  float ic_offset = 2045.0f;
+  float ib_offset = 2045.0f;
+
+  PIController pi_d;
+  PIController pi_q;
+  // pi_init(&pi_d, 0.4f, 50.0f, -0.4f, 0.4f);
+  // pi_init(&pi_d, 0.4f, 50.0f, -0.4f, 0.4f);
+  pi_init(&pi_q, 0.6f, 75.0f, -0.4f, 0.4f);
+  pi_init(&pi_q, 0.6f, 75.0f, -0.4f, 0.4f);
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   
-  char buffer[48];
-  encoder = init_encoder();
-  // pi_init(&pi_d, 0.5f, 0.8f, -0.2f, 0.2f);
-  // pi_init(&pi_q, 0.5f, 0.8f, -0.2f, 0.2f);
-  
-  // pi_init(&pi_d, 0.5f, 50.0f, -0.3f, 0.3f);
-  // pi_init(&pi_q, 0.5f, 50.0f, -0.3f, 0.3f);
-  pi_init(&pi_d, 0.5f, 5.0f, -0.3f, 0.3f);
-  pi_init(&pi_q, 0.5f, 5.0f, -0.3f, 0.3f);
+  float magnetic_pairs = 11.0f;
+  char buffer[128];
   
 
-  // HAL_Delay(500);
-  // calibrate_electrical_offset();
-  can_init_and_start();
+  float sign = 1.0f;
+  float moment = 0.0f;
+
   while (1)
   {
-    can_send_test();
-    HAL_Delay(100);
-    // continue;
     /* USER CODE END WHILE */
     // print_adc_input();
-    
-    update_encoder(&encoder);
-    theta_e = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
 
-    // torque_control(0.0f, 0.8f);
-    float theta = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
+    update_encoder(&encoder);
+
+    float ia = (ia_raw - ia_offset) / 2048.0f;
+    float ib = (ib_raw - ib_offset) / 2048.0f;
+    float ic = (ic_raw - ic_offset) / 2048.0f;
+
+    // float electrical_offset = -2.5;
+    // // float electrical_offset = 0.08;
+    // float theta_e = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f) * magnetic_pairs + electrical_offset;
+    // float theta = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
+
+    // float i_alpha;
+    // float i_beta;
+    // float id; 
+    // float iq;
+    // clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
+    // park_transform(i_alpha, i_beta, theta_e, &id, &iq);
+    
+    // float id_ref = 0.0f;
+    // float iq_ref = 0.5f;
+
+    // float err_d = id_ref - id;
+    // float err_q = iq_ref - iq;
+
+    // // float vd = pi_update(&pi_d, err_d, 0.00001429f);
+    // // float vq = pi_update(&pi_q, err_q, 0.00001429f);
+    // float vd = pi_update(&pi_d, err_d, 0.00005f);
+    // float vq = pi_update(&pi_q, err_q, 0.00005f);
+
+
+    // float v_alpha;
+    // float v_beta;
+    // float va;
+    // float vb;
+    // float vc;
+
+    // inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
+    // inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
+    
+
+
+    // float du = 0.5f + va;
+    // float dv = 0.5f + vb;
+    // float dw = 0.5f + vc;
+
+    // if (du < 0.05f) du = 0.05f;
+    // if (du > 0.95f) du = 0.95f;
+
+    // if (dv < 0.05f) dv = 0.05f;
+    // if (dv > 0.95f) dv = 0.95f;
+
+    // if (dw < 0.05f) dw = 0.05f;
+    // if (dw > 0.95f) dw = 0.95f;
+
+    // pwm_set(du, dv, dw);
+
 
     
     // sprintf(buffer, "%f \r\n", theta*magnetic_pairs); // electrical_offset
-    // sprintf(buffer, "%f %f \r\n", id*100, iq*100);
-    // print(buffer);
+    // sprintf(buffer, "%f \r\n", encoder_get_turns(&encoder)); // electrical_offset
+    sprintf(buffer, "%d %d %d \r\n", ia_raw, ib_raw, ic_raw);
+    print(buffer);
 
+ 
+    
 
     /* USER CODE BEGIN 3 */
     /* USER CODE END 3 */
@@ -482,32 +420,18 @@ static void MX_CAN_Init(void)
   /* USER CODE BEGIN CAN_Init 1 */
 
   /* USER CODE END CAN_Init 1 */
-  // hcan.Instance = CAN;
-  // hcan.Init.Prescaler = 16;
-  // hcan.Init.Mode = CAN_MODE_NORMAL;
-  // hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  // hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  // hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
-  // hcan.Init.TimeTriggeredMode = DISABLE;
-  // hcan.Init.AutoBusOff = DISABLE;
-  // hcan.Init.AutoWakeUp = DISABLE;
-  // hcan.Init.AutoRetransmission = DISABLE;
-  // hcan.Init.ReceiveFifoLocked = DISABLE;
-  // hcan.Init.TransmitFifoPriority = DISABLE;
-  
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 4;
+  hcan.Init.Prescaler = 16;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
-  hcan.Init.AutoRetransmission = ENABLE;
+  hcan.Init.AutoRetransmission = DISABLE;
   hcan.Init.ReceiveFifoLocked = DISABLE;
   hcan.Init.TransmitFifoPriority = DISABLE;
-  
   if (HAL_CAN_Init(&hcan) != HAL_OK)
   {
     Error_Handler();
