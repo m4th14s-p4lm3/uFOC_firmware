@@ -10,4 +10,9 @@ void inv_park_transform(float vd, float vq, float theta, float *v_alpha, float *
 
 
 
+void init_sin_table();
+float fast_sin(float x);
+float fast_cos(float x);
+
+
 #endif

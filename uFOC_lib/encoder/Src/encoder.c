@@ -1,6 +1,7 @@
 // encoder.c
 #include "encoder.h"
 #include "stm32f3xx_hal.h"
+#include <math.h>
 
 #define ENC_CS_GPIO_Port GPIOA
 #define ENC_CS_Pin       GPIO_PIN_5
@@ -35,6 +36,12 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset){
     
     encoder.current_raw_value = new_raw_value;
     encoder.prevous_raw_value = new_raw_value;
+    
+    encoder.ewma_previous_value = (float)new_raw_value;
+    encoder.ewma_value = (float)new_raw_value;
+    encoder.ewma_alpha = 0.9f;
+    encoder.ewma_delta = 0.0f;
+    
     encoder.position_ticks = new_raw_value;
     encoder.last_delta = 0;
     encoder.valid = 1;
@@ -67,21 +74,46 @@ void update_encoder(encoder_t* encoder){
     
     encoder->last_delta = delta;
     encoder->position_ticks += (int64_t)delta;
+    
+    encoder->ewma_value = encoder->ewma_alpha * (float)encoder->position_ticks + (1.0f - encoder->ewma_alpha) * encoder->ewma_value;
+    encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
+    encoder->ewma_previous_value = encoder->ewma_value;
+    
+    
+    // uint64_t mech_times_pp = (uint64_t)encoder->current_raw_value * (uint64_t)encoder->magnetic_pole_pairs;
+    // uint32_t mech_elec_raw = (uint32_t)(mech_times_pp % ENC_MODULO);
+    
+    // uint32_t elec_raw;
+    // if (mech_elec_raw >= encoder->electrical_offset) {
+        //     elec_raw = mech_elec_raw - encoder->electrical_offset;
+        // } else {
+            //     elec_raw = mech_elec_raw + ENC_MODULO - encoder->electrical_offset;
+            // }
+            
+            // encoder->electrical_angle_raw = elec_raw;
+            // encoder->electrical_angle = (2.0f * 3.14159265359f * (float)elec_raw) / (float)ENC_MODULO;
 
 
-
-    uint64_t mech_times_pp = (uint64_t)encoder->current_raw_value * (uint64_t)encoder->magnetic_pole_pairs;
-    uint32_t mech_elec_raw = (uint32_t)(mech_times_pp % ENC_MODULO);
-
-    uint32_t elec_raw;
-    if (mech_elec_raw >= encoder->electrical_offset) {
-        elec_raw = mech_elec_raw - encoder->electrical_offset;
-    } else {
-        elec_raw = mech_elec_raw + ENC_MODULO - encoder->electrical_offset;
+    float mech_raw = fmodf(encoder->ewma_value, (float)ENC_MODULO);
+    if (mech_raw < 0.0f) {
+        mech_raw += (float)ENC_MODULO;
     }
 
-    encoder->electrical_angle_raw = elec_raw;
-    encoder->electrical_angle = (2.0f * 3.14159265359f * (float)elec_raw) / (float)ENC_MODULO;
+    float mech_elec_raw = fmodf(
+        mech_raw * (float)encoder->magnetic_pole_pairs,
+        (float)ENC_MODULO
+    );
+
+    float elec_raw;
+    if (mech_elec_raw >= (float)encoder->electrical_offset) {
+        elec_raw = mech_elec_raw - (float)encoder->electrical_offset;
+    } else {
+        elec_raw = mech_elec_raw + (float)ENC_MODULO - (float)encoder->electrical_offset;
+    }
+
+    encoder->electrical_angle_raw = (uint32_t)elec_raw;
+    encoder->electrical_angle =
+        (2.0f * 3.14159265359f * elec_raw) / (float)ENC_MODULO;
 }
 
 void update_electrical_offset(encoder_t* encoder, uint32_t new_offset){
@@ -127,4 +159,13 @@ uint32_t mt6835_read_raw21(uint8_t *status_out)
     }
 
     return raw;
+}
+
+// angular velocity in radians per second
+float get_angular_velocity(const encoder_t* encoder, float dt){
+    if (!encoder || dt <= 0.0f) return 0.0f;
+
+    float delta_ticks = encoder->ewma_delta;
+    float velocity = (delta_ticks / dt) * ((2.0f * 3.14159265359f) / (float)ENC_MODULO);
+    return velocity;
 }

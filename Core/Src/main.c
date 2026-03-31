@@ -45,7 +45,7 @@
 static drv8316_config_t g_drv_cfg = {
     .pwm_mode = DRV8316_PWM_MODE_6X,
     .slew = DRV8316_SLEW_50V_PER_US,
-    .csa_gain = DRV8316_CSA_GAIN_0V30_PER_A,
+    .csa_gain = DRV8316_CSA_GAIN_0V60_PER_A,
     .sdo_push_pull = true,
     .enable_asr = false,
     .enable_aar = false,
@@ -130,15 +130,23 @@ PIController pi_q;
 float va, vb, vc;
 float id_ref = 0.0f;
 float iq_ref = 0.0f;
+float id, iq;
+
+
+float iq_ewma = 0.0f;
+float id_ewma = 0.0f;
+float idq_alpha = 1.0f;
 
 void torque_control(float id_ref, float iq_ref, float theta_e){
   float i_alpha, i_beta;    
   clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
-  float id, iq;
   park_transform(i_alpha, i_beta, theta_e, &id, &iq);
   
-  float err_d = id_ref - id;
-  float err_q = iq_ref - iq;
+  id_ewma = idq_alpha * id + (1.0f - idq_alpha) * id_ewma;
+  iq_ewma = idq_alpha * iq + (1.0f - idq_alpha) * iq_ewma;
+
+  float err_d = id_ref - id_ewma;
+  float err_q = iq_ref - iq_ewma;
   
   float vd = pi_update(&pi_d, err_d, 0.00005625f);
   float vq = pi_update(&pi_q, err_q, 0.00005625f); 
@@ -160,13 +168,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
                                ic_raw,
                                &g_current_offsets,
                                g_drv_cfg.csa_gain);
-
+    // update_encoder(&encoder);
+    
     ia = g_phase_currents.a;
     ib = g_phase_currents.b;
     ic = g_phase_currents.c;
     if (foc_enabled){
     // FOC control loop
-      float theta_e = encoder.electrical_angle;
+      float theta_e = encoder.electrical_angle + M_PI/2.0f;
       torque_control(id_ref, iq_ref, -theta_e);
       // float v_alpha, v_beta;
       // inv_park_transform(id_ref, iq_ref, -theta_e, &v_alpha, &v_beta);
@@ -190,16 +199,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
   void calibrate_electrical_offset(encoder_t* encoder){
       if (!encoder) return;
 
-      float m = 0.3f;
-
-      float du = 0.5f + 0.5f * m * sinf(0.0f);
-      // float dv = 0.5f + 0.5f * m * sinf(-2.0f * M_PI / 3.0f);
-      // float dw = 0.5f + 0.5f * m * sinf(-4.0f * M_PI / 3.0f);
-      float dv = 0.5f + 0.5f * m * sinf(2.0f * M_PI / 3.0f);
-      float dw = 0.5f + 0.5f * m * sinf(4.0f * M_PI / 3.0f);
-
+      float m = 0.5f;
+      float du = 0.5f + m * sinf(0.0f);
+      float dv = 0.5f + m * sinf(2.0f * M_PI / 3.0f);
+      float dw = 0.5f + m * sinf(4.0f * M_PI / 3.0f);
       pwm_set(du, dv, dw);
-      HAL_Delay(500);
+      // // pwm_set(dw, dv, du);
+      // apply_foc_voltage(0.0, 0.2, 0.0);
+      HAL_Delay(250);
 
       uint64_t sum = 0;
       for (int i = 0; i < 200; i++) {
@@ -208,11 +215,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
       }
 
       uint32_t mech_raw_aligned = (uint32_t)(sum / 200);
-      uint32_t mech_elec_raw =
-          (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
+      uint32_t mech_elec_raw = (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
 
       update_electrical_offset(encoder, mech_elec_raw);
-      update_encoder(encoder);
+      // update_encoder(encoder);
 
       pwm_set(0.5f, 0.5f, 0.5f);
   }
@@ -266,8 +272,8 @@ int main(void)
 
   // float p = 0.11f;
   // float k = 5.088f;
-  float p = 0.57f;
-  float k = 153.088f;
+  float p = 0.0f;
+  float k = 5000.088f;
   float out_min = -0.7f;
   float out_max = 0.7f;
   pi_init(&pi_d, p, k, out_min, out_max);
@@ -362,7 +368,7 @@ int main(void)
   communication_start();
   can_message_t msg;
   // ---- < /Can communication > ----
-
+  init_sin_table();
   foc_enabled = true;
 
   print("Entering main loop\r\n");  
@@ -370,19 +376,13 @@ int main(void)
 
 
 
-    // float theta_e = (((float)encoder.current_raw_value / 2097152.0f) * 2.0f * 3.14159265359f);
-    // pwm_set(0.0f, 0.0f, 0.0f);
-    
-    // // sprintf(buffer, "%d %d %d\r\n", ia_raw, ib_raw, ic_raw);
-    // sprintf(buffer, "%f %f %f\r\n", ia, ib, ic);
-    // // sprintf(buffer, "%f\r\n", ia + ib + ic);
-    // update_encoder(&encoder);
-    // sprintf(buffer, "%f\r\n", encoder.electrical_angle);
-    
-    // sprintf(buffer, "%f\r\n", encoder.electrical_angle);
-    // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
-    // print(buffer);
-    // HAL_Delay(10);
+
+    // float angular_velocity = get_angular_velocity(&encoder, 0.002f) * 9.55741f;
+    // sprintf(buffer, "%f\r\n", angular_velocity);
+    // sprintf(buffer, "%f %f\r\n", id_ewma*1000, iq_ewma*1000);
+    // float ea = get_electrical_angle(&encoder);
+    sprintf(buffer, "%f %d\r\n", encoder.ewma_value, encoder.current_raw_value);
+    print(buffer);
 
     // // CAN COMUNICATION 
     if (communication_read(&msg))
@@ -812,7 +812,7 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 5; // 31, 5
+  htim6.Init.Prescaler = 31; // 31, 5
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 999;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

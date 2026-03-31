@@ -31,14 +31,14 @@ COMMAND_IDS = {
     "iq_ref": SET_IQ_REF
 }
 
-SLIDER_CONFIG = {
-    "p": {"label": "P", "min": 0.0, "max": 2.0, "step": 0.001, "value": 0.2},
+SLIDER_CONFIG = { 
+    "p": {"label": "P", "min": 0.0, "max": 10.0, "step": 0.001, "value": 0.2},
     "k": {"label": "K", "min": 0.0, "max": 5000.0, "step": 0.001, "value": 0.0},
     "min": {"label": "Min", "min": -2.0, "max": 0, "step": 0.01, "value": -0.3},
-    "max": {"label": "Max", "min": 0, "max": 2.0, "step": 0.01, "value": 0.3},
+    "max": {"label": "Max", "min": 0, "max": 5.0, "step": 0.01, "value": 0.3},
     "electrical_offset": {"label": "electrical_offset", "min": 0, "max": 10.0, "step": 0.01, "value": 0.3},
-    "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.01, "value": 0.0},
-    "iq_ref": {"label": "iq_ref", "min": -1.0, "max": 1.0, "step": 0.01, "value": 0.0}
+    "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.0001, "value": 0.0},
+    "iq_ref": {"label": "iq_ref", "min": -1.0, "max": 1.0, "step": 0.0001, "value": 0.0}
 }
 
 
