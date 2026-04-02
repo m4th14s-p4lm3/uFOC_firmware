@@ -39,7 +39,8 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset){
     
     encoder.ewma_previous_value = (float)new_raw_value;
     encoder.ewma_value = (float)new_raw_value;
-    encoder.ewma_alpha = 0.9f;
+    encoder.ewma_alpha = 0.8f;
+    // encoder.ewma_alpha = 0.05f;
     encoder.ewma_delta = 0.0f;
     
     encoder.position_ticks = new_raw_value;
@@ -94,7 +95,8 @@ void update_encoder(encoder_t* encoder){
             // encoder->electrical_angle = (2.0f * 3.14159265359f * (float)elec_raw) / (float)ENC_MODULO;
 
 
-    float mech_raw = fmodf(encoder->ewma_value, (float)ENC_MODULO);
+    // float mech_raw = fmodf(encoder->ewma_value, (float)ENC_MODULO);
+    float mech_raw = fmodf(encoder->position_ticks, (float)ENC_MODULO);
     if (mech_raw < 0.0f) {
         mech_raw += (float)ENC_MODULO;
     }

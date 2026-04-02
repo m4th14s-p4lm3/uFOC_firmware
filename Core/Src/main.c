@@ -113,37 +113,61 @@ volatile float ia, ib, ic;
 
 // Update encoder in timer interrupt (TIM6)
 encoder_t encoder;
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim->Instance == TIM6) {
-        update_encoder(&encoder);
-        // char buffer[64];
-        // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
-        // print(buffer);
-    }
-}
+volatile float target_w = 0;
+PIController pi_w;
+
+
 
 
 volatile bool foc_enabled = false;
 PIController pi_d;
 PIController pi_q;
+
+
+
 float va, vb, vc;
-float id_ref = 0.0f;
-float iq_ref = 0.0f;
+volatile float id_ref = 0.0f;
+volatile float iq_ref = 0.0f;
 float id, iq;
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM6) {
+        update_encoder(&encoder);
+        if (foc_enabled){
+
+          // float angular_velocity = -get_angular_velocity(&encoder, 0.002f) * 9.55741f;
+          // float err_w = target_w - angular_velocity;
+          // float iq_ref_out = pi_update(&pi_w, err_w, 0.002f);
+          // if (iq_ref_out > 1.2){
+          //   iq_ref = 1.2;
+          // }
+          // else if (iq_ref_out < 0){
+          //   iq_ref = 0.0f;
+          // }
+          // else{
+          //   iq_ref = iq_ref_out;
+          // }
+          // iq_ref = iq_ref_out;
+
+        }
+        // char buffer[128];
+        // sprintf(buffer, "%f %f %f\r\n", angular_velocity, err_w, target_w);
+        // print(buffer);
+    }
+}
 
 
 float iq_ewma = 0.0f;
 float id_ewma = 0.0f;
-float idq_alpha = 1.0f;
+float i_ewma_alpha = 1.0f;
 
 void torque_control(float id_ref, float iq_ref, float theta_e){
   float i_alpha, i_beta;    
   clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
   park_transform(i_alpha, i_beta, theta_e, &id, &iq);
   
-  id_ewma = idq_alpha * id + (1.0f - idq_alpha) * id_ewma;
-  iq_ewma = idq_alpha * iq + (1.0f - idq_alpha) * iq_ewma;
+  id_ewma = i_ewma_alpha * id + (1.0f - i_ewma_alpha) * id_ewma;
+  iq_ewma = i_ewma_alpha * iq + (1.0f - i_ewma_alpha) * iq_ewma;
 
   float err_d = id_ref - id_ewma;
   float err_q = iq_ref - iq_ewma;
@@ -174,17 +198,47 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     ib = g_phase_currents.b;
     ic = g_phase_currents.c;
     if (foc_enabled){
-    // FOC control loop
-      float theta_e = encoder.electrical_angle + M_PI/2.0f;
-      torque_control(id_ref, iq_ref, -theta_e);
-      // float v_alpha, v_beta;
-      // inv_park_transform(id_ref, iq_ref, -theta_e, &v_alpha, &v_beta);
-      // inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
+      
+      // angular velocity control
+      // float angular_velocity = get_angular_velocity(&encoder, 0.00005625f * 2) * 9.55741f;
+      // float err_w = target_w - angular_velocity;
+      // iq_ref = pi_update(&pi_w, err_w, 0.00005625f * 2);
+      
+      
 
-      float du = 0.5f + va;
-      float dv = 0.5f + vb;
-      float dw = 0.5f + vc;
+      
+      
+      // FOC control loop
+      float theta_e = -(encoder.electrical_angle - 2*M_PI); // NOTE: Implement this to encoder.c with flag "inverse" which will flip sign and substract 2*M_PI
+      torque_control(id_ref, iq_ref, theta_e);
+
+
+      // SVPWM control
+      float vmax = fmaxf(va, fmaxf(vb, vc));
+      float vmin = fminf(va, fminf(vb, vc));
+      
+      float v0 = -0.5f * (vmax + vmin);
+
+      float va_svpwm = va + v0;
+      float vb_svpwm = vb + v0;
+      float vc_svpwm = vc + v0;
+
+      float du = 0.5f + 0.5f * va_svpwm;
+      float dv = 0.5f + 0.5f * vb_svpwm;
+      float dw = 0.5f + 0.5f * vc_svpwm;
+      // float du = 0.5f + va_svpwm;
+      // float dv = 0.5f + vb_svpwm;
+      // float dw = 0.5f + vc_svpwm;
+
       pwm_set(du, dv, dw);
+      
+
+      // SIN control
+      // float du = 0.5f + 0.5f * va;
+      // float dv = 0.5f + 0.5f * vb;
+      // float dw = 0.5f + 0.5f * vc;
+
+      // pwm_set(du, dv, dw);
 
     }
 
@@ -196,32 +250,60 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
   }
   // ------- < / CAN COMUNICATION > ----------- 
 
+
+
   void calibrate_electrical_offset(encoder_t* encoder){
-      if (!encoder) return;
+    if (!encoder) return;
 
-      float m = 0.5f;
-      float du = 0.5f + m * sinf(0.0f);
-      float dv = 0.5f + m * sinf(2.0f * M_PI / 3.0f);
-      float dw = 0.5f + m * sinf(4.0f * M_PI / 3.0f);
-      pwm_set(du, dv, dw);
-      // // pwm_set(dw, dv, du);
-      // apply_foc_voltage(0.0, 0.2, 0.0);
-      HAL_Delay(250);
+    float v_alpha, v_beta;
 
-      uint64_t sum = 0;
-      for (int i = 0; i < 200; i++) {
-          sum += encoder->current_raw_value;
-          HAL_Delay(2);
-      }
+    // align přes d-axis
+    inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
+    inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 
-      uint32_t mech_raw_aligned = (uint32_t)(sum / 200);
-      uint32_t mech_elec_raw = (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
+    float du = 0.5f + va;
+    float dv = 0.5f + vb;
+    float dw = 0.5f + vc;
+    pwm_set(du, dv, dw);
 
-      update_electrical_offset(encoder, mech_elec_raw);
-      // update_encoder(encoder);
+    HAL_Delay(800);
 
-      pwm_set(0.5f, 0.5f, 0.5f);
-  }
+    uint32_t first = 0;
+    int32_t acc = 0;
+    int32_t prev = 0;
+
+    for (int i = 0; i < 300; i++) {
+        update_encoder(encoder);
+        int32_t x = (int32_t)encoder->current_raw_value;
+
+        if (i == 0) {
+            first = (uint32_t)x;
+            prev = x;
+            acc = x;
+        } else {
+            int32_t dx = x - prev;
+            if (dx > (int32_t)ENC_HALF_MODULO)  x -= (int32_t)ENC_MODULO;
+            if (dx < -(int32_t)ENC_HALF_MODULO) x += (int32_t)ENC_MODULO;
+            acc += x;
+            prev = x;
+        }
+
+        HAL_Delay(2);
+    }
+
+    int32_t avg = acc / 300;
+    while (avg < 0) avg += (int32_t)ENC_MODULO;
+    while (avg >= (int32_t)ENC_MODULO) avg -= (int32_t)ENC_MODULO;
+
+    uint32_t mech_raw_aligned = (uint32_t)avg;
+    uint32_t mech_elec_raw =
+        (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
+
+    update_electrical_offset(encoder, mech_elec_raw);
+
+    pwm_set(0.5f, 0.5f, 0.5f);
+}
+
 
 
 /* USER CODE END 0 */
@@ -272,12 +354,19 @@ int main(void)
 
   // float p = 0.11f;
   // float k = 5.088f;
-  float p = 0.0f;
-  float k = 5000.088f;
-  float out_min = -0.7f;
-  float out_max = 0.7f;
-  pi_init(&pi_d, p, k, out_min, out_max);
-  pi_init(&pi_q, p, k, out_min, out_max);
+  float p_i = 0.5f;
+  float k_i = 130.0f;
+  float out_min_i = -1.5f;
+  float out_max_i = 1.5f;
+  pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i); // id_ref regulator
+  pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i); // iq_ref regulator
+  
+  float p_w = 0.3f;
+  float k_w = 260.0f;
+  float out_min_w = -1.5f;
+  float out_max_w = 1.5f;
+  pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w); // iq_ref regulator
+
   
   char buffer[128];
   // 1) Start CH4 (CC4 events)
@@ -289,7 +378,7 @@ int main(void)
   
   print("Booting...\r\n");
   
-  // drv8316_init(&g_drv_cfg);
+  drv8316_init(&g_drv_cfg);
   // if (drv8316_init(&g_drv_cfg) != HAL_OK) {
   //   Error_Handler();
   // }
@@ -372,74 +461,130 @@ int main(void)
   foc_enabled = true;
 
   print("Entering main loop\r\n");  
+  // open_loop3(&encoder);
   while (1){
 
 
 
 
     // float angular_velocity = get_angular_velocity(&encoder, 0.002f) * 9.55741f;
-    // sprintf(buffer, "%f\r\n", angular_velocity);
-    // sprintf(buffer, "%f %f\r\n", id_ewma*1000, iq_ewma*1000);
-    // float ea = get_electrical_angle(&encoder);
-    sprintf(buffer, "%f %d\r\n", encoder.ewma_value, encoder.current_raw_value);
-    print(buffer);
+    // float err_w = target_w - angular_velocity;
+    // iq_ref = pi_update(&pi_w, err_w, 0.002f);
 
-    // // CAN COMUNICATION 
+
+    // float angular_velocity = -get_angular_velocity(&encoder, 0.002f) * 9.55741f;
+    // sprintf(buffer, "%f\r\n", angular_velocity);
+    // print(buffer);
+
+
+    // CAN COMUNICATION 
     if (communication_read(&msg))
     {
-
-      // msg.id
-      // msg.dlc
-      // msg.data[0..msg.dlc-1]
       switch(msg.id){
         case SET_P:
-          memcpy(&p, msg.data, sizeof(float));
-          sprintf(buffer, "Setting p to %f \r\n", p);
-          print(buffer);
-          pi_init(&pi_d, p, k, out_min, out_max);
-          pi_init(&pi_q, p, k, out_min, out_max);
+          memcpy(&p_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting p to %f \r\n", p_w);
+          // print(buffer);
+          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
+          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
           break;
         case SET_K:
-          memcpy(&k, msg.data, sizeof(float));
-          sprintf(buffer, "Setting k to %f \r\n", k);
-          print(buffer);
-          pi_init(&pi_d, p, k, out_min, out_max);
-          pi_init(&pi_q, p, k, out_min, out_max);
+          memcpy(&k_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting k to %f \r\n", k_w);
+          // print(buffer);
+          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
+          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
           break;
         case SET_MIN:
-          memcpy(&out_min, msg.data, sizeof(float));
-          sprintf(buffer, "Setting out_min to %f \r\n", out_min);
-          print(buffer);
-          pi_init(&pi_d, p, k, out_min, out_max);
-          pi_init(&pi_q, p, k, out_min, out_max);
+          memcpy(&out_min_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+          // print(buffer);
+          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
+          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
           break;
         case SET_MAX:
-          memcpy(&out_max, msg.data, sizeof(float));
-          sprintf(buffer, "Setting out_max to %f \r\n", out_max);
-          print(buffer);
-          pi_init(&pi_d, p, k, out_min, out_max);
-          pi_init(&pi_q, p, k, out_min, out_max);
+          memcpy(&out_max_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+          // print(buffer);
+          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
+          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
           break;
-        // case SET_ELECTRICAL_OFFSET:
-        //   memcpy(&electrical_offset, msg.data, sizeof(float));
-        //   sprintf(buffer, "Setting electrical_offset to %f \r\n", electrical_offset);
-        //   print(buffer);
-        //   break;
+        case SET_TARGET_VELOCITY:
+          // float target_w;
+          memcpy(&target_w, msg.data, sizeof(float));
+
+          // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+          // print(buffer);
+          break;
         case SET_ID_REF:
           memcpy(&id_ref, msg.data, sizeof(float));
-          sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
-          print(buffer);
+          // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
+          // print(buffer);
           break;
         case SET_IQ_REF:
           memcpy(&iq_ref, msg.data, sizeof(float));
-          sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
-          print(buffer);
+          // sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+          // print(buffer);
           break;
 
         default:
           print("Unknown command");
       }
     }
+
+    // if (communication_read(&msg))
+    // {
+    //   switch(msg.id){
+    //     case SET_P:
+    //       memcpy(&p_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting p to %f \r\n", p_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_K:
+    //       memcpy(&k_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting k to %f \r\n", k_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_MIN:
+    //       memcpy(&out_min_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_MAX:
+    //       memcpy(&out_max_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_TARGET_VELOCITY:
+    //       // float target_w;
+    //       memcpy(&target_w, msg.data, sizeof(float));
+
+    //       // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+    //       // print(buffer);
+    //       break;
+    //     case SET_ID_REF:
+    //       memcpy(&id_ref, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
+    //       // print(buffer);
+    //       break;
+    //     case SET_IQ_REF:
+    //       memcpy(&iq_ref, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+    //       // print(buffer);
+    //       break;
+
+    //     default:
+    //       print("Unknown command");
+    //   }
+    // }
   
 
   }

@@ -14,7 +14,7 @@ extern "C" {
 #define SET_MIN 0x102
 #define SET_MAX 0x103
 
-#define SET_ELECTRICAL_OFFSET 0x104
+#define SET_TARGET_VELOCITY 0x104
 
 #define SET_ID_REF 0x105
 #define SET_IQ_REF 0x106
