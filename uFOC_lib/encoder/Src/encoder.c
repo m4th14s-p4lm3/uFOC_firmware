@@ -13,6 +13,36 @@
 
 extern SPI_HandleTypeDef hspi3;
 
+/* -------------------------------------------------------------------------- */
+/* CRC-8 pro MT6835                                                           */
+/* -------------------------------------------------------------------------- */
+
+/* Nastav na 0 pro dočasné vypnutí CRC (debug). */
+#define MT6835_CRC_ENABLED  1
+
+/* MT6835 CRC-8, polynomial 0x07, init 0x00.
+ * Pokryté bajty: rx[2], rx[3], rx[4] (reg 0x003–0x005).
+ * Pokud crc_error_count stále roste, zkus změnit CRC_INIT nebo rozsah
+ * bajtů — ověř v datasheetu MT6835 sekci "CRC Check". */
+#define MT6835_CRC_INIT     0x00u
+#define MT6835_CRC_POLY     0x07u
+
+static uint8_t crc8_mt6835(const uint8_t *data, uint8_t len)
+{
+    uint8_t crc = MT6835_CRC_INIT;
+    for (uint8_t i = 0u; i < len; i++) {
+        crc ^= data[i];
+        for (uint8_t bit = 0u; bit < 8u; bit++) {
+            if (crc & 0x80u) {
+                crc = (uint8_t)((crc << 1u) ^ MT6835_CRC_POLY);
+            } else {
+                crc = (uint8_t)(crc << 1u);
+            }
+        }
+    }
+    return crc;
+}
+
 static HAL_StatusTypeDef spi3_configure_for_encoder(void)
 {
     if (hspi3.Init.CLKPolarity == SPI_POLARITY_HIGH &&
@@ -29,14 +59,24 @@ static HAL_StatusTypeDef spi3_configure_for_encoder(void)
 }
 
 
-encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset){
+encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, bool invert_dir){
     encoder_t encoder;
     uint8_t status_out;
-    uint32_t new_raw_value = mt6835_read_raw21(&status_out);
+    bool crc_ok = false;
+    uint32_t new_raw_value = mt6835_read_raw21(&status_out, &crc_ok);
     
+    encoder.invert_dir = invert_dir;
+
     encoder.current_raw_value = new_raw_value;
     encoder.prevous_raw_value = new_raw_value;
     
+
+    encoder.angular_velocity = 0.0f;
+    encoder.angular_velocity_ewma = 0.0f;
+    encoder.angular_velocity_ewma_alpha = 0.4f;
+
+
+
     encoder.ewma_previous_value = (float)new_raw_value;
     encoder.ewma_value = (float)new_raw_value;
     encoder.ewma_alpha = 0.8f;
@@ -51,16 +91,29 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset){
     encoder.electrical_offset = electrical_offset;
     encoder.electrical_angle_raw = 0;
     encoder.electrical_angle = 0.0f;
-    
+
+    encoder.last_good_raw = new_raw_value;
+    encoder.crc_error_count = 0u;
+
     return encoder;
 }
 
 
 void update_encoder(encoder_t* encoder){
     if (!encoder) return;
-    
+
     uint8_t status_out;
-    uint32_t new_raw_value = mt6835_read_raw21(&status_out);
+    bool crc_ok = false;
+    uint32_t new_raw_value = mt6835_read_raw21(&status_out, &crc_ok);
+
+    if (!crc_ok) {
+        encoder->crc_error_count++;
+        /* Použij poslední dobrou hodnotu — motor pokračuje bez záškubu.
+         * delta = 0, takže velocity estimace "zamrzne" na jednu periodu. */
+        new_raw_value = encoder->last_good_raw;
+    } else {
+        encoder->last_good_raw = new_raw_value;
+    }
         
     encoder->prevous_raw_value = encoder->current_raw_value;
     encoder->current_raw_value = new_raw_value;
@@ -76,46 +129,50 @@ void update_encoder(encoder_t* encoder){
     encoder->last_delta = delta;
     encoder->position_ticks += (int64_t)delta;
     
-    encoder->ewma_value = encoder->ewma_alpha * (float)encoder->position_ticks + (1.0f - encoder->ewma_alpha) * encoder->ewma_value;
+
+
+    encoder->angular_velocity = get_angular_velocity(encoder, 0.00015002f); // unit is RADIANS - NOTE: Add "dt" property to init!
+    encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
+                                        (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
+
+
+
+    encoder->ewma_value = encoder->ewma_alpha * encoder->position_ticks + (1.0f - encoder->ewma_alpha) * encoder->ewma_value;
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
     
-    // uint64_t mech_times_pp = (uint64_t)encoder->current_raw_value * (uint64_t)encoder->magnetic_pole_pairs;
-    // uint32_t mech_elec_raw = (uint32_t)(mech_times_pp % ENC_MODULO);
-    
-    // uint32_t elec_raw;
-    // if (mech_elec_raw >= encoder->electrical_offset) {
-        //     elec_raw = mech_elec_raw - encoder->electrical_offset;
-        // } else {
-            //     elec_raw = mech_elec_raw + ENC_MODULO - encoder->electrical_offset;
-            // }
-            
-            // encoder->electrical_angle_raw = elec_raw;
-            // encoder->electrical_angle = (2.0f * 3.14159265359f * (float)elec_raw) / (float)ENC_MODULO;
 
-
-    // float mech_raw = fmodf(encoder->ewma_value, (float)ENC_MODULO);
-    float mech_raw = fmodf(encoder->position_ticks, (float)ENC_MODULO);
-    if (mech_raw < 0.0f) {
-        mech_raw += (float)ENC_MODULO;
+    /* Integer modulo — přesné bez ohledu na velikost position_ticks.
+     * fmodf(int64 → float) ztrácí přesnost po ~8 otáčkách (float má 24b mantisu,
+     * ENC_MODULO = 2^21). Tady počítáme čistě v int64 a float použijeme až
+     * na konci kdy je hodnota garantovaně v [0, ENC_MODULO). */
+    int64_t mech_raw_i = encoder->position_ticks % (int64_t)ENC_MODULO;
+    if (mech_raw_i < 0) {
+        mech_raw_i += (int64_t)ENC_MODULO;
     }
 
-    float mech_elec_raw = fmodf(
-        mech_raw * (float)encoder->magnetic_pole_pairs,
-        (float)ENC_MODULO
-    );
+    /* mech_raw_i ∈ [0, 2^21-1], × pole_pairs (11) max = ~23M < INT32_MAX,
+     * ale int64 pro jistotu. */
+    int64_t mech_elec_raw_i = (mech_raw_i * (int64_t)encoder->magnetic_pole_pairs)
+                              % (int64_t)ENC_MODULO;
 
-    float elec_raw;
-    if (mech_elec_raw >= (float)encoder->electrical_offset) {
-        elec_raw = mech_elec_raw - (float)encoder->electrical_offset;
+    int64_t elec_raw_i;
+    if (mech_elec_raw_i >= (int64_t)encoder->electrical_offset) {
+        elec_raw_i = mech_elec_raw_i - (int64_t)encoder->electrical_offset;
     } else {
-        elec_raw = mech_elec_raw + (float)ENC_MODULO - (float)encoder->electrical_offset;
+        elec_raw_i = mech_elec_raw_i + (int64_t)ENC_MODULO - (int64_t)encoder->electrical_offset;
     }
 
-    encoder->electrical_angle_raw = (uint32_t)elec_raw;
+    /* Teprve tady přejdeme na float — hodnota je v [0, ENC_MODULO) = [0, 2^21),
+     * takže konverze je přesná (float mantisa 24b > 21b). */
+    encoder->electrical_angle_raw = (uint32_t)elec_raw_i;
     encoder->electrical_angle =
-        (2.0f * 3.14159265359f * elec_raw) / (float)ENC_MODULO;
+        (2.0f * 3.14159265359f * (float)elec_raw_i) / (float)ENC_MODULO;
+
+    if (encoder->invert_dir){
+        encoder->electrical_angle = -(encoder->electrical_angle - 2 * M_PI);
+    }
 }
 
 void update_electrical_offset(encoder_t* encoder, uint32_t new_offset){
@@ -128,36 +185,47 @@ double encoder_get_turns(const encoder_t* e) {
 }
 
 
-uint32_t mt6835_read_raw21(uint8_t *status_out)
+uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
 {
-    
     // Burst command (0xA) + start address 0x003
-    // Sending 6 bytes: [cmd][addr][dummy][dummy][dummy][dummy]
+    // Frame: [cmd|addr][dummy x4] → rx: [don't care x2][ANGLE[20:13]][ANGLE[12:5]][ANGLE[4:0]+STATUS][CRC]
     uint8_t tx[6] = { (uint8_t)(0xA << 4), 0x03, 0x00, 0x00, 0x00, 0x00 };
     uint8_t rx[6] = {0};
-    
+
+    if (crc_ok) {
+        *crc_ok = false;
+    }
+
     if (spi3_configure_for_encoder() != HAL_OK) {
         if (status_out) {
             *status_out = 0xFF;
         }
-        return 0;
+        return 0u;
     }
 
-    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_RESET); // TAKE SPI
+    ENC_CS_GPIO_Port->BSRR = (uint32_t)ENC_CS_Pin << 16; // CS low
     HAL_SPI_TransmitReceive(&hspi3, tx, rx, sizeof(tx), 100);
-    HAL_GPIO_WritePin(ENC_CS_GPIO_Port, ENC_CS_Pin, GPIO_PIN_SET); // RELEASE SPI
+    ENC_CS_GPIO_Port->BSRR = ENC_CS_Pin;                  // CS high
 
-    
-    // Datasheet: 0x003 = ANGLE[20:13], 0x004 = ANGLE[12:5], 0x005 = ANGLE[4:0] + STATUS[2:0], 0x006 = CRC :contentReference[oaicite:1]{index=1}
+    // Datasheet: 0x003 = ANGLE[20:13], 0x004 = ANGLE[12:5],
+    //            0x005 = ANGLE[4:0] + STATUS[2:0], 0x006 = CRC
     uint32_t raw =
         ((uint32_t)rx[2] << 13) |
         ((uint32_t)rx[3] << 5)  |
         ((uint32_t)rx[4] >> 3);
 
-    raw &= 0x1FFFFF; // 21 bit
+    raw &= 0x1FFFFFu; // 21 bit
 
     if (status_out) {
-        *status_out = (uint8_t)(rx[4] & 0x07); // STATUS[2:0]
+        *status_out = (uint8_t)(rx[4] & 0x07u); // STATUS[2:0]
+    }
+
+    /* CRC check — polynomial 0x07, init 0xFF, pokrývá rx[2..4].
+     * Pokud CRC nesedí, ověř v datasheetu MT6835 sekci "CRC Check" —
+     * polynomial a init hodnotu. */
+    if (crc_ok) {
+        uint8_t computed = crc8_mt6835(&rx[2], 3u);
+        *crc_ok = (computed == rx[5]);
     }
 
     return raw;

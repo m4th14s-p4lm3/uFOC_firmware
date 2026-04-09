@@ -12,8 +12,16 @@
 
 
 typedef struct {
+    bool invert_dir;
+
     uint32_t prevous_raw_value;
     uint32_t current_raw_value;
+
+
+    float angular_velocity;
+    float angular_velocity_ewma;
+    float angular_velocity_ewma_alpha;
+
     float ewma_value;
     float ewma_previous_value;
     float ewma_delta;
@@ -27,12 +35,17 @@ typedef struct {
 
     uint8_t magnetic_pole_pairs;
     uint32_t electrical_offset;
-    uint32_t electrical_angle_raw; 
+    uint32_t electrical_angle_raw;
     float electrical_angle;
+
+    /* CRC diagnostika */
+    uint32_t last_good_raw;     // poslední raw hodnota s platným CRC
+    uint32_t crc_error_count;   // celkový počet CRC chyb od startu
 
 } encoder_t;
 
-encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset);
+// encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset);
+encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, bool invert_dir);
 
 void update_encoder(encoder_t* encoder);
 
@@ -40,7 +53,7 @@ double encoder_get_turns(const encoder_t* e);
 
 void update_electrical_offset(encoder_t* encoder, uint32_t new_offset);
 
-uint32_t mt6835_read_raw21(uint8_t *status_out);
+uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok);
 
 float get_angular_velocity(const encoder_t* encoder, float dt);
 
