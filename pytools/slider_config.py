@@ -33,7 +33,7 @@ COMMAND_IDS = {
 
 SLIDER_CONFIG = { 
     "p": {"label": "P", "min": 0.0, "max": 20.0, "step": 0.1, "value": 0.2},
-    "k": {"label": "K", "min": 0.0, "max": 5000.0, "step": 0.5, "value": 0.0},
+    "k": {"label": "K", "min": 0.0, "max": 60000.0, "step": 0.5, "value": 0.0},
     "min": {"label": "Min", "min": -2.0, "max": 0, "step": 0.01, "value": -0.3},
     "max": {"label": "Max", "min": 0, "max": 5.0, "step": 0.01, "value": 0.3},
     "electrical_offset": {"label": "electrical_offset", "min": -700.0, "max": 700.0, "step": 1, "value": 0},

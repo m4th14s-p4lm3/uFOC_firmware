@@ -3,7 +3,8 @@ import time
 
 bus = can.Bus(
     interface="slcan",
-    channel="/dev/cu.usbmodem206F327555481",
+    # channel="/dev/cu.usbmodem206F327555481",
+    channel="/dev/tty.usbmodem206F327555481",
     bitrate=500000,
 )
 

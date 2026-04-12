@@ -73,7 +73,7 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
 
     encoder.angular_velocity = 0.0f;
     encoder.angular_velocity_ewma = 0.0f;
-    encoder.angular_velocity_ewma_alpha = 0.4f;
+    encoder.angular_velocity_ewma_alpha = 1.0f;
 
 
 
@@ -131,16 +131,16 @@ void update_encoder(encoder_t* encoder){
     
 
 
-    encoder->angular_velocity = get_angular_velocity(encoder, 0.00015002f); // unit is RADIANS - NOTE: Add "dt" property to init!
-    encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
-                                        (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
-
-
-
+    
+    
+    
     encoder->ewma_value = encoder->ewma_alpha * encoder->position_ticks + (1.0f - encoder->ewma_alpha) * encoder->ewma_value;
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
+    encoder->angular_velocity = get_angular_velocity(encoder, 0.00015002f); // unit is RADIANS - NOTE: Add "dt" property to init!
+    encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
+                                        (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     
 
     /* Integer modulo — přesné bez ohledu na velikost position_ticks.

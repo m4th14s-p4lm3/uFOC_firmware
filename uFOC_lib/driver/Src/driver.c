@@ -146,8 +146,8 @@ void pwm_init(void)
 
 void pwm_set(float du, float dv, float dw)
 {
-    const float duty_min = 0.02f;
-    const float duty_max = 0.98f;
+    const float duty_min = 0.0f;
+    const float duty_max = 1.0f;
     const uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
 
     du = clampf(du, duty_min, duty_max);
