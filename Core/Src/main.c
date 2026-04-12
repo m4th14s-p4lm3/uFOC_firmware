@@ -200,32 +200,6 @@ void torque_control(float id_ref, float iq_ref, float theta_e){
   inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
   inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 }
-// #define L_D        0.002f    // Henry — změř! (viz dříve)
-// #define L_Q        0.002f    // pro surface PMSM L_D ≈ L_Q
-// #define LAMBDA_PM  0.01f     // Wb — viz níže jak odhadnout
-
-// void torque_control(float id_ref, float iq_ref, float theta_e) {
-//     float i_alpha, i_beta;
-//     clarke_transform(ia, ib, ic, &i_alpha, &i_beta);
-//     park_transform(i_alpha, i_beta, theta_e, &id, &iq);
-
-//     float err_d = id_ref - id;
-//     float err_q = iq_ref - iq;
-
-//     float vd_pi = pi_update(&pi_d, err_d, 0.00015002f);
-//     float vq_pi = pi_update(&pi_q, err_q, 0.00015002f);
-
-//     // Elektrická rychlost [rad/s elektrické]
-//     float omega_e = encoder.angular_velocity_ewma * (float)encoder.magnetic_pole_pairs;
-
-//     // Feedforward decoupling
-//     float vd = vd_pi - omega_e * L_Q * iq;
-//     float vq = vq_pi + omega_e * L_D * id + omega_e * LAMBDA_PM;
-
-//     float v_alpha, v_beta;
-//     inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
-//     inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
-// }
 
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
