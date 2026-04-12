@@ -14,6 +14,8 @@ CAN_BITRATE = int(os.getenv("CAN_BITRATE", "500000"))
 
 SET_P = 0x100
 SET_K = 0x101
+SET_D = 0x107
+
 SET_MIN = 0x102
 SET_MAX = 0x103
 
@@ -23,7 +25,8 @@ SET_IQ_REF = 0x106
 
 COMMAND_IDS = {
     "p": SET_P,
-    "k": SET_K,
+    "i": SET_K,
+    "d": SET_D,
     "min": SET_MIN,
     "max": SET_MAX,
     "electrical_offset" : SET_ELECTRICAL_OFFSET,
@@ -33,12 +36,13 @@ COMMAND_IDS = {
 
 SLIDER_CONFIG = { 
     "p": {"label": "P", "min": 0.0, "max": 20.0, "step": 0.1, "value": 0.2},
-    "k": {"label": "K", "min": 0.0, "max": 60000.0, "step": 0.5, "value": 0.0},
+    "i": {"label": "I", "min": 0.0, "max": 60000.0, "step": 0.5, "value": 0.0},
+    "d": {"label": "D", "min": 0.0, "max": 2.0, "step": 0.1, "value": 0.0},
     "min": {"label": "Min", "min": -2.0, "max": 0, "step": 0.01, "value": -0.3},
     "max": {"label": "Max", "min": 0, "max": 5.0, "step": 0.01, "value": 0.3},
-    "electrical_offset": {"label": "electrical_offset", "min": -700.0, "max": 700.0, "step": 1, "value": 0},
-    "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.0001, "value": 0.0},
-    "iq_ref": {"label": "iq_ref", "min": -3.0, "max": 3.0, "step": 0.0001, "value": 0.0}
+    "electrical_offset": {"label": "Velocity", "min": -1200.0, "max": 1200.0, "step": 1, "value": 0},
+    "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.01, "value": 0.0},
+    "iq_ref": {"label": "iq_ref", "min": -3.0, "max": 3.0, "step": 0.01, "value": 0.0}
 }
 
 

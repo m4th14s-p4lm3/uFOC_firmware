@@ -5,9 +5,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define MAX_ENCODER_RAW_VALUE 2097151u
-#define ENC_MODULO            (MAX_ENCODER_RAW_VALUE + 1u)   // 2097152
-#define ENC_HALF_MODULO       (ENC_MODULO / 2u)              // 1048576
+#define MAX_ENCODER_RAW_VALUE   2097151u
+#define ENC_MODULO              (MAX_ENCODER_RAW_VALUE + 1u)   // 2097152
+#define ENC_HALF_MODULO         (ENC_MODULO / 2u)              // 1048576
+
+/* Maximum capacity of the velocity circular buffer.
+ * num_samples must be <= this value. */
+#define ENCODER_MAX_VEL_SAMPLES 64u
 
 
 
@@ -39,8 +43,14 @@ typedef struct {
     float electrical_angle;
 
     /* CRC diagnostika */
-    uint32_t last_good_raw;     // poslední raw hodnota s platným CRC
-    uint32_t crc_error_count;   // celkový počet CRC chyb od startu
+    uint32_t last_good_raw;
+    uint32_t crc_error_count;
+
+    /* Velocity moving-average circular buffer */
+    uint8_t num_samples;                          // window size (1 – ENCODER_MAX_VEL_SAMPLES)
+    float   vel_buf[ENCODER_MAX_VEL_SAMPLES];     // ring buffer storage
+    uint8_t vel_buf_head;                         // next write index
+    uint8_t vel_buf_count;                        // how many valid samples are stored
 
 } encoder_t;
 
@@ -59,5 +69,10 @@ float get_angular_velocity(const encoder_t* encoder, float dt);
 
 float get_electrical_angle(encoder_t* encoder);
 
+/* Returns the moving average of the last num_samples angular-velocity values.
+ * Direction inversion (invert_dir) is applied to the result so the sign
+ * matches the motor's logical forward direction. */
+float get_velocity_moving_average(const encoder_t* encoder);
 
+void mt6835_init();
 #endif

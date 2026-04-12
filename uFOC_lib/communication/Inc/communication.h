@@ -10,7 +10,9 @@ extern "C" {
 #endif
 
 #define SET_P 0x100
-#define SET_K 0x101
+#define SET_I 0x101
+#define SET_D 0x107
+
 #define SET_MIN 0x102
 #define SET_MAX 0x103
 

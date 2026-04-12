@@ -115,7 +115,7 @@ volatile float ia, ib, ic;
 // Update encoder in timer interrupt (TIM6)
 encoder_t encoder;
 volatile float target_w = 0;
-PIController pi_w;
+PIDController pid_w;
 
 
 
@@ -137,56 +137,52 @@ uint64_t prev_turns = 0;
 float angular_velocity = 0;
 volatile uint32_t adc_inj_cb_count = 0;
 
+
+// float alpha_update = 0.8;
+// float iq_ewma = 0;
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance != TIM6) return;
 
-    // static uint8_t tick = 0;
-    // if (++tick < 4) return;  // Velocity loop každý 4. TIM6 tick
-    // tick = 0;
+    if (target_w < -1000) return;
+    // adc_inj_cb_count++;
 
-    // if (!foc_enabled) return;
+    static uint8_t tick = 0;
+    uint8_t skip = 1;
+    if (++tick < skip) return;
+    tick = 0;
+
+    if (!foc_enabled) return;
 
     // const float dt_vel = 0.001778f;  // 4 × (1/2250 Hz)
+    const float dt_vel = skip * 1.0f/1125.0f;  // 4 × (1/2250 Hz)
 
-    // // Velocity v RPM
-    // float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
-    // float error_w = target_w - velocity_rpm;
+    float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
 
-    // // PI regulátor → iq_ref v Ampérech
-    // iq_ref = pi_update(&pi_w, error_w, dt_vel);
+//     float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
+    float error_w = target_w - velocity_rpm;
+
+    // iq_ref = pid_update(&pid_w, error_w, dt_vel);
+    float iq_cmd = pid_update(&pid_w, error_w, dt_vel);
+
+    float max_step_up = 0.01f; // A per update
+    float max_step_down = 0.5f; // A per update
+    float diq = iq_cmd - iq_ref;
+    if (diq >  max_step_up) diq = max_step_up;
+    // if (diq < -max_step_down) diq = -max_step_down;
+    iq_ref += diq;
+
+
+
+
+    // float iq_ref_new = pid_update(&pid_w, error_w, dt_vel);
+    // iq_ewma = alpha_update * iq_ref_new + (1 - alpha_update) * iq_ewma;
+    // iq_ref_new = iq_ref;
+    // iq_ref = iq_ewma;
 }
 
-// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-// {
-//     if (htim->Instance == TIM6) {
-//       adc_inj_cb_count++;
 
-//         if (foc_enabled){    
-
-//           float angular_velocity = encoder.angular_velocity_ewma * 9.55741f;
-//           float err_w = target_w - angular_velocity;
-          
-//           float iq_ref_out = pi_update(&pi_w, err_w, 0.001f);
-//           // iq_ref = iq_ref_out;
-          
-//           // if (iq_ref_out > 0.8){
-//           //   iq_ref = 0.8;
-//           // }
-//           // else if (iq_ref_out < 0){
-//           //   iq_ref = 0.0f;
-//           // }
-//           // else{
-//           //   iq_ref = iq_ref_out;
-//           // }
-
-//           char buffer[128];
-//           sprintf(buffer, "%f %f %f\r\n", angular_velocity, err_w, target_w);
-//           // sprintf(buffer, "%f\r\n", angular_velocity);
-//           print(buffer);
-//         }
-//     }
-// }
 
 void torque_control(float id_ref, float iq_ref, float theta_e){
   float i_alpha, i_beta;    
@@ -197,8 +193,8 @@ void torque_control(float id_ref, float iq_ref, float theta_e){
   float err_d = id_ref - id;
   float err_q = iq_ref - iq;
   
-  float vd = pi_update(&pi_d, err_d, 0.00015002f);
-  float vq = pi_update(&pi_q, err_q, 0.00015002f); 
+  float vd = pi_update(&pi_d, err_d, 0.0002f);
+  float vq = pi_update(&pi_q, err_q, 0.0002f); 
   
   float v_alpha, v_beta;
   inv_park_transform(vd, vq, theta_e, &v_alpha, &v_beta);
@@ -303,7 +299,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     float v_alpha, v_beta;
 
     // align přes d-axis
-    inv_park_transform(0.8f, 0.0f, 0.0f, &v_alpha, &v_beta);
+    inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
     inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 
     float du = 0.5f + va;
@@ -400,17 +396,18 @@ int main(void)
   // float p = 0.11f;
   // float k = 5.088f;
   float p_i = 6.0f;
-  float k_i = 22000.0f;
+  float i_i = 22000.0f;
   float out_min_i = -20.5f;
   float out_max_i = 20.5f;
-  pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i); // id_ref regulator
-  pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i); // iq_ref regulator
+  pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i); // id_ref regulator
+  pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i); // iq_ref regulator
   
-  float p_w = 7.8f;
-  float k_w = 1000.0f;
-  float out_min_w = 0.0f;
+  float p_w = 0.01f;
+  float i_w = 0.8f;
+  float d_w = 0.0f;
+  float out_min_w = -0.0f;
   float out_max_w = 0.8f;
-  pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w); // iq_ref regulator
+  pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w); // iq_ref regulator
 
   
   char buffer[128];
@@ -482,7 +479,9 @@ int main(void)
         //   g_current_offsets.c,
         //   g_current_offsets.valid ? 1 : 0);
         // print(buffer);
-        
+        // spi3_configure_for_encoder();
+
+        mt6835_init();
         calibrate_electrical_offset(&encoder);
         sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
                 (unsigned long)encoder.electrical_offset,
@@ -515,13 +514,14 @@ int main(void)
 
 
     char buffer[128];
-    float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
+    // float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
+    float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
 
-    sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w, iq*1000.0f);
+    sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w, iq_ref*1000.0f);
     print(buffer);
 
     // float err_w = target_w - angular_velocity;
-    // iq_ref = pi_update(&pi_w, err_w, 0.002f);
+    // iq_ref = pi_update(&pid_w, err_w, 0.002f);
 
 
     // float angular_velocity = -get_angular_velocity(&encoder, 0.002f) * 9.55741f;
@@ -548,94 +548,36 @@ int main(void)
 
 
     // CAN COMUNICATION 
-    if (communication_read(&msg))
-    {
-      switch(msg.id){
-        case SET_P:
-          memcpy(&p_i, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting p to %f \r\n", p_w);
-          // print(buffer);
-          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
-          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
-          break;
-        case SET_K:
-          memcpy(&k_i, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting k to %f \r\n", k_w);
-          // print(buffer);
-          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
-          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
-          break;
-        case SET_MIN:
-          memcpy(&out_min_i, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
-          // print(buffer);
-          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
-          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
-          break;
-        case SET_MAX:
-          memcpy(&out_max_i, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
-          // print(buffer);
-          pi_init(&pi_d, p_i, k_i, out_min_i, out_max_i);
-          pi_init(&pi_q, p_i, k_i, out_min_i, out_max_i);
-          break;
-        case SET_TARGET_VELOCITY:
-          // float target_w;
-          memcpy(&target_w, msg.data, sizeof(float));
-
-          // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
-          // print(buffer);
-          break;
-        case SET_ID_REF:
-          memcpy(&id_ref, msg.data, sizeof(float));
-          // pi_reset(&pi_d);
-          // pi_reset(&pi_q);
-          // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
-          // print(buffer);
-          break;
-        case SET_IQ_REF:
-          memcpy(&iq_ref, msg.data, sizeof(float));
-          // pi_reset(&pi_d);
-          // pi_reset(&pi_q);
-          sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
-          print(buffer);
-          break;
-
-        default:
-          print("Unknown command");
-      }
-    }
-
     // if (communication_read(&msg))
     // {
     //   switch(msg.id){
     //     case SET_P:
-    //       memcpy(&p_w, msg.data, sizeof(float));
+    //       memcpy(&p_i, msg.data, sizeof(float));
     //       // sprintf(buffer, "Setting p to %f \r\n", p_w);
     //       // print(buffer);
-    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
-    //       // pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i);
+    //       pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i);
     //       break;
-    //     case SET_K:
-    //       memcpy(&k_w, msg.data, sizeof(float));
-    //       // sprintf(buffer, "Setting k to %f \r\n", k_w);
+    //     case SET_I:
+    //       memcpy(&i_i, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting k to %f \r\n", i_w);
     //       // print(buffer);
-    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
-    //       // pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i);
+    //       pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i);
     //       break;
     //     case SET_MIN:
-    //       memcpy(&out_min_w, msg.data, sizeof(float));
+    //       memcpy(&out_min_i, msg.data, sizeof(float));
     //       // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
     //       // print(buffer);
-    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
-    //       // pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i);
+    //       pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i);
     //       break;
     //     case SET_MAX:
-    //       memcpy(&out_max_w, msg.data, sizeof(float));
+    //       memcpy(&out_max_i, msg.data, sizeof(float));
     //       // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
     //       // print(buffer);
-    //       pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
-    //       // pi_init(&pi_w, p_w, k_w, out_min_w, out_max_w);
+    //       pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i);
+    //       pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i);
     //       break;
     //     case SET_TARGET_VELOCITY:
     //       // float target_w;
@@ -646,19 +588,77 @@ int main(void)
     //       break;
     //     case SET_ID_REF:
     //       memcpy(&id_ref, msg.data, sizeof(float));
+    //       // pi_reset(&pi_d);
+    //       // pi_reset(&pi_q);
     //       // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
     //       // print(buffer);
     //       break;
     //     case SET_IQ_REF:
     //       memcpy(&iq_ref, msg.data, sizeof(float));
-    //       // sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
-    //       // print(buffer);
+    //       // pi_reset(&pi_d);
+    //       // pi_reset(&pi_q);
+    //       sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+    //       print(buffer);
     //       break;
 
     //     default:
     //       print("Unknown command");
     //   }
     // }
+
+    if (communication_read(&msg))
+    {
+      switch(msg.id){
+        case SET_P:
+          memcpy(&p_w, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting p to %f \r\n", p_w);
+          // print(buffer);
+          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          break;
+        case SET_I:
+          memcpy(&i_w, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting k to %f \r\n", i_w);
+          // print(buffer);
+          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          break;
+        case SET_D:
+          memcpy(&d_w, msg.data, sizeof(float));
+          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          break;
+        case SET_MIN:
+          memcpy(&out_min_w, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+          // print(buffer);
+          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          break;
+        case SET_MAX:
+          memcpy(&out_max_w, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+          // print(buffer);
+          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          break;
+        case SET_TARGET_VELOCITY:
+          // float target_w;
+          memcpy(&target_w, msg.data, sizeof(float));
+
+          // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+          // print(buffer);
+          break;
+        case SET_ID_REF:
+          memcpy(&id_ref, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
+          // print(buffer);
+          break;
+        case SET_IQ_REF:
+          memcpy(&iq_ref, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+          // print(buffer);
+          break;
+
+        default:
+          print("Unknown command");
+      }
+    }
   
 
   }

@@ -95,6 +95,15 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
     encoder.last_good_raw = new_raw_value;
     encoder.crc_error_count = 0u;
 
+    /* Velocity moving-average buffer — default window = 8 samples */
+    encoder.num_samples   = 8u;
+    encoder.vel_buf_head  = 0u;
+    encoder.vel_buf_count = 0u;
+    for (uint8_t i = 0u; i < ENCODER_MAX_VEL_SAMPLES; i++) {
+        encoder.vel_buf[i] = 0.0f;
+    }
+    // spi3_configure_for_encoder();
+
     return encoder;
 }
 
@@ -138,15 +147,12 @@ void update_encoder(encoder_t* encoder){
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
-    encoder->angular_velocity = get_angular_velocity(encoder, 0.00015002f); // unit is RADIANS - NOTE: Add "dt" property to init!
+    encoder->angular_velocity = get_angular_velocity(encoder, 0.0002f); // unit is RADIANS - NOTE: Add "dt" property to init!
     encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
                                         (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     
 
-    /* Integer modulo — přesné bez ohledu na velikost position_ticks.
-     * fmodf(int64 → float) ztrácí přesnost po ~8 otáčkách (float má 24b mantisu,
-     * ENC_MODULO = 2^21). Tady počítáme čistě v int64 a float použijeme až
-     * na konci kdy je hodnota garantovaně v [0, ENC_MODULO). */
+
     int64_t mech_raw_i = encoder->position_ticks % (int64_t)ENC_MODULO;
     if (mech_raw_i < 0) {
         mech_raw_i += (int64_t)ENC_MODULO;
@@ -164,14 +170,24 @@ void update_encoder(encoder_t* encoder){
         elec_raw_i = mech_elec_raw_i + (int64_t)ENC_MODULO - (int64_t)encoder->electrical_offset;
     }
 
-    /* Teprve tady přejdeme na float — hodnota je v [0, ENC_MODULO) = [0, 2^21),
-     * takže konverze je přesná (float mantisa 24b > 21b). */
     encoder->electrical_angle_raw = (uint32_t)elec_raw_i;
     encoder->electrical_angle =
         (2.0f * 3.14159265359f * (float)elec_raw_i) / (float)ENC_MODULO;
 
     if (encoder->invert_dir){
         encoder->electrical_angle = -(encoder->electrical_angle - 2 * M_PI);
+    }
+
+    /* Push the latest angular_velocity into the circular buffer.
+     * Clamp num_samples to a valid range to guard against misconfiguration. */
+    uint8_t n = encoder->num_samples;
+    if (n == 0u) n = 1u;
+    if (n > ENCODER_MAX_VEL_SAMPLES) n = ENCODER_MAX_VEL_SAMPLES;
+
+    encoder->vel_buf[encoder->vel_buf_head] = encoder->angular_velocity;
+    encoder->vel_buf_head = (uint8_t)((encoder->vel_buf_head + 1u) % n);
+    if (encoder->vel_buf_count < n) {
+        encoder->vel_buf_count++;
     }
 }
 
@@ -185,6 +201,10 @@ double encoder_get_turns(const encoder_t* e) {
 }
 
 
+
+void mt6835_init(){
+    spi3_configure_for_encoder();
+}
 uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
 {
     // Burst command (0xA) + start address 0x003
@@ -220,15 +240,36 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
         *status_out = (uint8_t)(rx[4] & 0x07u); // STATUS[2:0]
     }
 
-    /* CRC check — polynomial 0x07, init 0xFF, pokrývá rx[2..4].
-     * Pokud CRC nesedí, ověř v datasheetu MT6835 sekci "CRC Check" —
-     * polynomial a init hodnotu. */
     if (crc_ok) {
         uint8_t computed = crc8_mt6835(&rx[2], 3u);
         *crc_ok = (computed == rx[5]);
     }
 
     return raw;
+}
+
+/* Returns the moving average of the last num_samples angular-velocity readings.
+ * The sign is flipped when invert_dir is set, consistent with the logical
+ * motor direction convention used for electrical_angle. */
+float get_velocity_moving_average(const encoder_t* encoder)
+{
+    if (!encoder) return 0.0f;
+
+    uint8_t count = encoder->vel_buf_count;
+    if (count == 0u) return 0.0f;
+
+    float sum = 0.0f;
+    for (uint8_t i = 0u; i < count; i++) {
+        sum += encoder->vel_buf[i];
+    }
+
+    float avg = sum / (float)count;
+
+    if (encoder->invert_dir) {
+        avg = -avg;
+    }
+
+    return avg;
 }
 
 // angular velocity in radians per second
