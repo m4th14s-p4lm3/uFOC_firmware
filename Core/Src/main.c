@@ -158,20 +158,21 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // const float dt_vel = 0.001778f;  // 4 × (1/2250 Hz)
     const float dt_vel = skip * 1.0f/1125.0f;  // 4 × (1/2250 Hz)
 
-    float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
+    // float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
 
-//     float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
+    float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
     float error_w = target_w - velocity_rpm;
 
     // iq_ref = pid_update(&pid_w, error_w, dt_vel);
     float iq_cmd = pid_update(&pid_w, error_w, dt_vel);
 
-    float max_step_up = 0.01f; // A per update
-    float max_step_down = 0.5f; // A per update
-    float diq = iq_cmd - iq_ref;
-    if (diq >  max_step_up) diq = max_step_up;
-    // if (diq < -max_step_down) diq = -max_step_down;
-    iq_ref += diq;
+    iq_ref = iq_cmd;
+    // float max_step_up = 0.01f; // A per update
+    // float max_step_down = 0.5f; // A per update
+    // float diq = iq_cmd - iq_ref;
+    // if (diq >  max_step_up) diq = max_step_up;
+    // // if (diq < -max_step_down) diq = -max_step_down;
+    // iq_ref += diq;
 
 
 
@@ -376,10 +377,10 @@ int main(void)
   pi_init(&pi_d, p_i, i_i, out_min_i, out_max_i); // id_ref regulator
   pi_init(&pi_q, p_i, i_i, out_min_i, out_max_i); // iq_ref regulator
   
-  float p_w = 0.01f;
-  float i_w = 0.8f;
+  float p_w = 0.00288;// 0.00244f;
+  float i_w = 0.26f; //0.00992f;
   float d_w = 0.0f;
-  float out_min_w = -0.0f;
+  float out_min_w = -0.8f;
   float out_max_w = 0.8f;
   pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w); // iq_ref regulator
 
@@ -969,7 +970,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 50;
+  sBreakDeadTimeConfig.DeadTime = 20;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.BreakFilter = 0;

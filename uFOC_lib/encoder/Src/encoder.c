@@ -73,7 +73,7 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
 
     encoder.angular_velocity = 0.0f;
     encoder.angular_velocity_ewma = 0.0f;
-    encoder.angular_velocity_ewma_alpha = 1.0f;
+    encoder.angular_velocity_ewma_alpha = 0.1f;
 
 
 

@@ -37,9 +37,9 @@ COMMAND_IDS = {
 }
 
 SLIDER_CONFIG = {
-    "p": {"label": "P", "min": 0.0, "max": 15.0, "step": 0.0001, "value": 0.2},
-    "i": {"label": "I", "min": 0.0, "max": 20.0, "step": 0.001, "value": 0.0},
-    "d": {"label": "D", "min": -2.0, "max": 2.0, "step": 0.1, "value": 0.0},
+    "p": {"label": "P", "min": 0.0, "max": 0.009, "step": 0.00001, "value": 0.0001},
+    "i": {"label": "I", "min": 0.0, "max": 0.5, "step": 0.00001, "value": 0.0},
+    "d": {"label": "D", "min": 0.0, "max": 0.0001, "step": 0.0000001, "value": 0.0},
     "min": {"label": "Min", "min": -2.0, "max": 0.0, "step": 0.01, "value": -0.3},
     "max": {"label": "Max", "min": 0.0, "max": 0.8, "step": 0.01, "value": 0.3},
     "electrical_offset": {"label": "Velocity", "min": -1200.0, "max": 1000.0, "step": 1, "value": 0.0},
@@ -219,7 +219,7 @@ def build_page() -> str:
             <section class="slider-card">
               <div class="slider-head">
                 <label for="{key}">{config["label"]}</label>
-                <output id="{key}-value">{config["value"]:.2f}</output>
+                <output id="{key}-value">{config["value"]:.5f}</output>
               </div>
               <input
                 id="{key}"
