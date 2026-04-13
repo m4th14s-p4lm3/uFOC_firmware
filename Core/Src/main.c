@@ -118,8 +118,12 @@ volatile float target_w = 0;
 PIDController pid_w;
 
 
+volatile float target_position = 0;
+PIDController pid_pos;
 
 
+
+volatile bool foc_enable_positional_control = false;
 volatile bool foc_enabled = false;
 PIController pi_d;
 PIController pi_q;
@@ -144,44 +148,33 @@ volatile uint32_t adc_inj_cb_count = 0;
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance != TIM6) return;
-
-    if (target_w < -1000) return;
     // adc_inj_cb_count++;
-
-    static uint8_t tick = 0;
-    uint8_t skip = 1;
-    if (++tick < skip) return;
-    tick = 0;
-
+    if (target_w < -1000) return; // HACK - REMOVE LATER!
     if (!foc_enabled) return;
+    if (!foc_enable_positional_control) return;
+    const float dt = 1.0f/1125.0f;  // 4 × (1/2250 Hz)
 
-    // const float dt_vel = 0.001778f;  // 4 × (1/2250 Hz)
-    const float dt_vel = skip * 1.0f/1125.0f;  // 4 × (1/2250 Hz)
 
+    float position = -encoder_get_turns(&encoder);
+    
+    float error_pos = target_position - position;
+    target_w = pid_update(&pid_pos, error_pos, dt);
+
+
+
+    
+    // Velocity PID control
+    
     // float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
-
     float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
     float error_w = target_w - velocity_rpm;
-
-    // iq_ref = pid_update(&pid_w, error_w, dt_vel);
-    float iq_cmd = pid_update(&pid_w, error_w, dt_vel);
-
-    iq_ref = iq_cmd;
-    // float max_step_up = 0.01f; // A per update
-    // float max_step_down = 0.5f; // A per update
-    // float diq = iq_cmd - iq_ref;
-    // if (diq >  max_step_up) diq = max_step_up;
-    // // if (diq < -max_step_down) diq = -max_step_down;
-    // iq_ref += diq;
+    iq_ref = pid_update(&pid_w, error_w, dt);
+    // iq_ref = iq_cmd;
 
 
 
 
-    // float iq_ref_new = pid_update(&pid_w, error_w, dt_vel);
-    // iq_ewma = alpha_update * iq_ref_new + (1 - alpha_update) * iq_ewma;
-    // iq_ref_new = iq_ref;
-    // iq_ref = iq_ewma;
-}
+  }
 
 
 
@@ -363,7 +356,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
   
 
-  encoder = init_encoder(11, 0, true);
+  encoder = init_encoder(11, 2074833, true); // offset=2074833 elec_angle=6.273562
+  // encoder = init_encoder(11, 0, true);
   if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
     Error_Handler();
   }
@@ -384,7 +378,16 @@ int main(void)
   float out_max_w = 0.8f;
   pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w); // iq_ref regulator
 
-  
+
+
+  float p_pos = 5000.0f;
+  float i_pos = 0.0f;
+  float d_pos = 0.0f;
+  float out_min_pos = -1000.0f;
+  float out_max_pos = 1000.0f;
+  pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
+
+
   char buffer[128];
   // 1) Start CH4 (CC4 events)
   // 2) Set period mid
@@ -478,8 +481,9 @@ int main(void)
   communication_start();
   can_message_t msg;
   // ---- < /Can communication > ----
-  // init_sin_table();
   foc_enabled = true;
+  HAL_Delay(30);
+  foc_enable_positional_control = true;
 
   print("Entering main loop\r\n");  
   // open_loop3(&encoder);
@@ -490,9 +494,12 @@ int main(void)
 
     char buffer[128];
     // float velocity_rpm = encoder.angular_velocity_ewma * 9.55741f;
-    float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
+    // float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
+    float position = -encoder_get_turns(&encoder);
 
-    sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w, iq_ref*1000.0f);
+
+    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w, iq_ref*1000.0f);
+    sprintf(buffer, "%f %f %f\r\n", position, target_position, target_w);
     print(buffer);
 
     // float err_w = target_w - angular_velocity;
@@ -581,43 +588,101 @@ int main(void)
     //   }
     // }
 
+
+    // Velocity
+    // if (communication_read(&msg))
+    // {
+    //   switch(msg.id){
+    //     case SET_P:
+    //       memcpy(&p_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting p to %f \r\n", p_w);
+    //       // print(buffer);
+    //       pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_I:
+    //       memcpy(&i_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting k to %f \r\n", i_w);
+    //       // print(buffer);
+    //       pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_D:
+    //       memcpy(&d_w, msg.data, sizeof(float));
+    //       pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_MIN:
+    //       memcpy(&out_min_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+    //       // print(buffer);
+    //       pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_MAX:
+    //       memcpy(&out_max_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+    //       // print(buffer);
+    //       pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+    //       break;
+    //     case SET_TARGET_VELOCITY:
+    //       // float target_w;
+    //       memcpy(&target_w, msg.data, sizeof(float));
+
+    //       // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+    //       // print(buffer);
+    //       break;
+    //     case SET_ID_REF:
+    //       memcpy(&id_ref, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting id_ref to %f \r\n", id_ref);
+    //       // print(buffer);
+    //       break;
+    //     case SET_IQ_REF:
+    //       memcpy(&iq_ref, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting iq_ref to %f \r\n", iq_ref);
+    //       // print(buffer);
+    //       break;
+
+    //     default:
+    //       print("Unknown command");
+    //   }
+    // }
+
+    // PID position
     if (communication_read(&msg))
     {
       switch(msg.id){
         case SET_P:
-          memcpy(&p_w, msg.data, sizeof(float));
+          memcpy(&p_pos, msg.data, sizeof(float));
           // sprintf(buffer, "Setting p to %f \r\n", p_w);
           // print(buffer);
-          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
           break;
         case SET_I:
-          memcpy(&i_w, msg.data, sizeof(float));
+          memcpy(&i_pos, msg.data, sizeof(float));
           // sprintf(buffer, "Setting k to %f \r\n", i_w);
           // print(buffer);
-          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
           break;
         case SET_D:
-          memcpy(&d_w, msg.data, sizeof(float));
-          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          memcpy(&d_pos, msg.data, sizeof(float));
+          pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
           break;
         case SET_MIN:
-          memcpy(&out_min_w, msg.data, sizeof(float));
+          memcpy(&out_min_pos, msg.data, sizeof(float));
           // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
           // print(buffer);
-          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
           break;
         case SET_MAX:
-          memcpy(&out_max_w, msg.data, sizeof(float));
+          memcpy(&out_max_pos, msg.data, sizeof(float));
           // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
           // print(buffer);
-          pid_init(&pid_w, p_w, i_w, d_w, out_min_w, out_max_w);
+          pid_init(&pid_pos, p_pos, i_pos, d_pos, out_min_pos, out_max_pos);
           break;
         case SET_TARGET_VELOCITY:
           // float target_w;
           memcpy(&target_w, msg.data, sizeof(float));
-
-          // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
-          // print(buffer);
+          break;
+        case SET_TARGET_POS:
+          // float target_w;
+          memcpy(&target_position, msg.data, sizeof(float));
           break;
         case SET_ID_REF:
           memcpy(&id_ref, msg.data, sizeof(float));
@@ -970,7 +1035,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 20;
+  sBreakDeadTimeConfig.DeadTime = 50;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.BreakFilter = 0;

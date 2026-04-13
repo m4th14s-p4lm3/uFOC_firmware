@@ -21,6 +21,7 @@ extern "C" {
 #define SET_ID_REF 0x105
 #define SET_IQ_REF 0x106
 
+#define SET_TARGET_POS 0x108
 
 typedef struct
 {

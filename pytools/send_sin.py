@@ -25,6 +25,8 @@ SET_ELECTRICAL_OFFSET = 0x104
 SET_ID_REF = 0x105
 SET_IQ_REF = 0x106
 
+SET_TARGET_POS = 0x108
+
 COMMAND_IDS = {
     "p": SET_P,
     "i": SET_K,
@@ -34,15 +36,17 @@ COMMAND_IDS = {
     "electrical_offset": SET_ELECTRICAL_OFFSET,
     "id_ref": SET_ID_REF,
     "iq_ref": SET_IQ_REF,
+    "target_position": SET_TARGET_POS,
 }
 
 SLIDER_CONFIG = {
-    "p": {"label": "P", "min": 0.0, "max": 0.009, "step": 0.00001, "value": 0.0001},
-    "i": {"label": "I", "min": 0.0, "max": 0.5, "step": 0.00001, "value": 0.0},
-    "d": {"label": "D", "min": 0.0, "max": 0.0001, "step": 0.0000001, "value": 0.0},
-    "min": {"label": "Min", "min": -2.0, "max": 0.0, "step": 0.01, "value": -0.3},
-    "max": {"label": "Max", "min": 0.0, "max": 0.8, "step": 0.01, "value": 0.3},
-    "electrical_offset": {"label": "Velocity", "min": -1200.0, "max": 1000.0, "step": 1, "value": 0.0},
+    "p": {"label": "P", "min": 0.0, "max": 5000, "step": 0.00001, "value": 0.0001},
+    "i": {"label": "I", "min": 0.0, "max": 500, "step": 0.00001, "value": 0.0},
+    "d": {"label": "D", "min": 0.0, "max": 500, "step": 0.0000001, "value": 0.0},
+    "min": {"label": "Min", "min": -1000, "max": 0.0, "step": 0.01, "value": -0.3},
+    "max": {"label": "Max", "min": 0.0, "max": 1000, "step": 0.01, "value": 0.3},
+    "electrical_offset": {"label": "Velocity", "min": -1200.0, "max": 1500.0, "step": 1, "value": 0.0},
+    "target_position": {"label": "Position", "min": -15.0, "max": 15.0, "step": 1, "value": 0.0},
     "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.01, "value": 0.0},
     "iq_ref": {"label": "iq_ref", "min": -3.0, "max": 3.0, "step": 0.01, "value": 0.0},
 }
