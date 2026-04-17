@@ -18,8 +18,12 @@ void init_sin_table(void)
     }
 }
 
+
 static inline void fast_sincos(float theta, float *s, float *c)
 {
+    /* Wrap theta into [0, 2π) — handles negative values and > 2π */
+    theta -= TWO_PI * floorf(theta * (1.0f / TWO_PI));
+
     float index = theta * SIN_SCALE;
     int i = (int)index;
     float frac = index - (float)i;
@@ -31,7 +35,6 @@ static inline void fast_sincos(float theta, float *s, float *c)
     float s2 = sin_table[i1];
     *s = s1 + frac * (s2 - s1);
 
-    /* cos(x) = sin(x + pi/2) */
     int q = SIN_TABLE_SIZE / 4;
     int c0 = (i0 + q) & SIN_MASK;
     int c1 = (i1 + q) & SIN_MASK;
@@ -40,6 +43,29 @@ static inline void fast_sincos(float theta, float *s, float *c)
     float c2v = sin_table[c1];
     *c = c1v + frac * (c2v - c1v);
 }
+
+// static inline void fast_sincos(float theta, float *s, float *c)
+// {
+//     float index = theta * SIN_SCALE;
+//     int i = (int)index;
+//     float frac = index - (float)i;
+
+//     int i0 = i & SIN_MASK;
+//     int i1 = (i + 1) & SIN_MASK;
+
+//     float s1 = sin_table[i0];
+//     float s2 = sin_table[i1];
+//     *s = s1 + frac * (s2 - s1);
+
+//     /* cos(x) = sin(x + pi/2) */
+//     int q = SIN_TABLE_SIZE / 4;
+//     int c0 = (i0 + q) & SIN_MASK;
+//     int c1 = (i1 + q) & SIN_MASK;
+
+//     float c1v = sin_table[c0];
+//     float c2v = sin_table[c1];
+//     *c = c1v + frac * (c2v - c1v);
+// }
 
 void clarke_transform(float ia, float ib, float ic,
                       float *i_alpha, float *i_beta)

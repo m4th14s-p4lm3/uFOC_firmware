@@ -73,7 +73,7 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
 
     encoder.angular_velocity = 0.0f;
     encoder.angular_velocity_ewma = 0.0f;
-    encoder.angular_velocity_ewma_alpha = 0.1f;
+    encoder.angular_velocity_ewma_alpha = 0.5f;
 
 
 
@@ -216,12 +216,12 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
         *crc_ok = false;
     }
 
-    if (spi3_configure_for_encoder() != HAL_OK) {
-        if (status_out) {
-            *status_out = 0xFF;
-        }
-        return 0u;
-    }
+    // if (spi3_configure_for_encoder() != HAL_OK) {
+    //     if (status_out) {
+    //         *status_out = 0xFF;
+    //     }
+    //     return 0u;
+    // }
 
     ENC_CS_GPIO_Port->BSRR = (uint32_t)ENC_CS_Pin << 16; // CS low
     HAL_SPI_TransmitReceive(&hspi3, tx, rx, sizeof(tx), 100);

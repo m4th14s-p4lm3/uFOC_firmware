@@ -122,6 +122,7 @@ static HAL_StatusTypeDef drv8316_spi_transfer_internal(uint16_t tx_data, uint16_
     status = HAL_SPI_TransmitReceive(&hspi3, tx_buf, rx_buf, 2u, DRV8316_SPI_TIMEOUT_MS);
 
     drv8316_deselect();
+    HAL_Delay(2);
 
     *rx_data = (uint16_t)(((uint16_t)rx_buf[0] << 8) | (uint16_t)rx_buf[1]);
     return status;
