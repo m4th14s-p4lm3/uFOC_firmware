@@ -52,11 +52,11 @@ COMMAND_IDS = {
 # }
 
 SLIDER_CONFIG = {
-    "p": {"label": "P", "min": 0.0, "max": 0.01, "step": 0.00001, "value": 0.00288},
-    "i": {"label": "I", "min": 0.0, "max": 3, "step": 0.00001, "value": 0.18},
+    "p": {"label": "P", "min": 0.0, "max": 10000, "step": 0.00001, "value": 0.00288},
+    "i": {"label": "I", "min": 0.0, "max": 22000, "step": 0.00001, "value": 0.18},
     "d": {"label": "D", "min": 0.0, "max": 500, "step": 0.0000001, "value": 0.0},
-    "min": {"label": "Min", "min": -1000, "max": 0.0, "step": 0.01, "value": -0.3},
-    "max": {"label": "Max", "min": 0.0, "max": 1000, "step": 0.01, "value": 0.3},
+    "min": {"label": "Max Velocity", "min": 0, "max": 1000, "step": 0.01, "value": -0.3},
+    "max": {"label": "Max current", "min": 0.0, "max": 1, "step": 0.01, "value": 0.3},
     "electrical_offset": {"label": "Velocity", "min": -1200.0, "max": 1300.0, "step": 0.1, "value": 0.0},
     "target_position": {"label": "Position", "min": -15.0, "max": 15.0, "step": 1, "value": 0.0},
     "id_ref": {"label": "id_ref", "min": -2.0, "max": 2.0, "step": 0.01, "value": 0.0},

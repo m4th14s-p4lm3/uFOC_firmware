@@ -13,7 +13,7 @@ typedef struct {
 void pi_init(PIController *pi, float kp, float ki,  float out_max);
 void pi_reset(PIController *pi);
 float pi_update(PIController *pi, float error, float dt);
-
+void pi_set_out_max(PIController *pi, float out_max);
 
 // PID
 typedef struct {
@@ -31,6 +31,11 @@ typedef struct {
 void pid_init(PIDController *pid, float kp, float ki, float kd, float out_max);
 void pid_reset(PIDController *pid);
 float pid_update(PIDController *pid, float error, float dt);
+void pid_set_out_max(PIDController *pid, float out_max);
+
+
+
+
 
 
 #endif

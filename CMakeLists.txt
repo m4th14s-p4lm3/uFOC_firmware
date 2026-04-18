@@ -72,19 +72,26 @@ target_link_libraries(debug_utils PUBLIC stm32cubemx driver)
 add_library(foc STATIC)
 target_sources(foc PRIVATE uFOC_lib/foc/Src/foc.c)
 target_include_directories(foc PUBLIC uFOC_lib/foc/Inc)
-target_sources(foc PRIVATE uFOC_lib/foc/Src/pi_controller.c)
-target_include_directories(foc PUBLIC uFOC_lib/pi_controller/Inc)
-target_link_libraries(foc PUBLIC stm32cubemx)
+target_link_libraries(foc PUBLIC stm32cubemx pi_controller)
 
 
+# PI Controller
+add_library(pi_controller STATIC)
+target_sources(pi_controller PRIVATE uFOC_lib/pi_controller/Src/pi_controller.c)
+target_include_directories(pi_controller PUBLIC uFOC_lib/pi_controller/Inc)
+target_link_libraries(pi_controller PUBLIC stm32cubemx)
+
+# CAN Communication
 add_library(communication STATIC)
-target_sources(communication PRIVATE uFOC_lib/communication/Src/communication.c)
-target_include_directories(communication PUBLIC uFOC_lib/communication/Inc)
 target_sources(communication PRIVATE uFOC_lib/communication/Src/communication.c)
 target_include_directories(communication PUBLIC uFOC_lib/communication/Inc)
 target_link_libraries(communication PUBLIC stm32cubemx)
 
-
+# Config
+add_library(config STATIC)
+target_sources(config PRIVATE uFOC_lib/config/Src/config.c)
+target_include_directories(config PUBLIC uFOC_lib/config/Inc)
+target_link_libraries(config PUBLIC stm32cubemx pi_controller)
 
 
 # Add include paths
@@ -111,6 +118,8 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     debug_utils
     foc
     m
+    config
+    pi_controller
     
 )
 target_link_options(${PROJECT_NAME} PRIVATE

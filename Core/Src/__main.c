@@ -117,16 +117,23 @@ float va, vb, vc;                         // Output voltages
 
 
 encoder_t encoder;
-// volatile float config.angular_velocity_target = 0;
-
-// volatile float config.position_target = 0;
-// PIDController config.regulators.pid_position;
-
-config_t config;
+volatile float target_w = 0;
+PIController pi_w;
 
 
+// volatile float config.target_position = 0;
+PIController pi_pos;
 
 
+volatile bool foc_enable_positional_control = false;
+volatile bool foc_enabled = false;
+
+config_t config = {
+  .target_torque_current = 0.0f,
+  .target_flux_current = 0.0f,
+  .target_angular_velocity = 0.0f,
+  .target_position = 0.0f
+};
 
 // volatile uint32_t adc_inj_cb_count = 0;
 
@@ -134,24 +141,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance != TIM6) return;
     // // adc_inj_cb_count++;
-    if (config.angular_velocity_target < -1000) return; // HACK - REMOVE LATER!
-    if (config.control_state == NO_CONTROL) return;
+    if (target_w < -1000) return; // HACK - REMOVE LATER!
+    if (!foc_enabled) return;
+    if (!foc_enable_positional_control) return;
     
     const float dt = 1.0f/1125.0f;
 
-    // ---- < Position PID control > -----
-    if (config.control_state >= POSITION_CONTROL){
-      float position = -encoder_get_turns(&encoder);
-      float error_pos = config.position_target - position;
-      config.angular_velocity_target = pid_update(&config.regulators.pid_position, error_pos, dt);
-    }
 
-    // ---- < Velocity PI control > ----
-    if (config.control_state >= VELOCITY_CONTROL){
-      float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
-      float error_w = config.angular_velocity_target - velocity_rpm;
-      config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
-    }
+    // // ---- < Position PID control > -----
+    // float position = -encoder_get_turns(&encoder);
+    // float error_pos = config.target_position - position;
+    // target_w = pi_update(&pi_pos, error_pos, dt);
+
+    
+    // // ---- < Velocity PID control > ----
+
+    // float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
+    // float error_w = target_w - velocity_rpm;
+    // config.target_torque_current = pi_update(&pi_w, error_w, dt);
+
   }
 
 
@@ -175,14 +183,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 
     update_encoder(&encoder);
 
-    if (config.control_state >= CURRENT_CONTROL){
+    if (foc_enabled){
       // FOC control loop
       float theta_e = encoder.electrical_angle;
-      foc_compute_voltages(config.flux_current_target, config.torque_current_target, // reference currents for PI regulator
+      foc_compute_voltages(config.target_flux_current, config.target_torque_current, // reference currents for PI regulator
                     &theta_e, // measured electric angle
                         &ia, &ib, &ic, // measured input current
                         &va, &vb, &vc, // calculated output voltage
-                      &config.regulators.pi_d_current_axis, &config.regulators.pi_q_current_axis); // PI config.regulators
+                      &config.regulators.pi_d_axis, &config.regulators.pi_q_axis); // PI config.regulators
 
       // SVPWM control
       float vmax = fmaxf(va, fmaxf(vb, vc));
@@ -304,15 +312,37 @@ char buffer[128];
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   
-  config = init_config();  // initialize config
-
   init_sin_table();
   drv8316_init(&g_drv_cfg);
   HAL_Delay(300);
-  encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, 2074833, ENCODER_INVERT_DIR); // offset=2074833 elec_angle=6.273562
+  encoder = init_encoder(11, 2074833, true); // offset=2074833 elec_angle=6.273562
   mt6835_init();
 
+  
+  // ------ < REGULATORS > -------
+  // float p_i = 2.3f;
+  // float i_i = 1100.0f;
+  float p_i = PI_CURRENT_KP; //0.5f;
+  float i_i = PI_CURRENT_KI; //2200.0f;
+  float out_min_i = -V_BUS_NOMINAL;
+  float out_max_i = V_BUS_NOMINAL;
+  pi_init(&config.regulators.pi_d_axis, p_i, i_i, out_max_i); // config.target_flux_current regulator
+  pi_init(&config.regulators.pi_q_axis, p_i, i_i, out_max_i); // config.target_torque_current regulator
+  
+  float p_w =  0.00232f; //0.00288;// 0.00244f; 0.00179
+  float i_w =  0.28f; //0.26f; //0.00992f;
+  float out_min_w = -1.0f;
+  float out_max_w = 1.0f; // 0.8
+  pi_init(&pi_w, p_w, i_w, out_max_w); // config.target_torque_current regulator
 
+
+
+  float p_pos = 5000.0f;
+  float i_pos = 0.0f;
+  float out_min_pos = -1000.0f;
+  float out_max_pos = 1000.0f;
+  pi_init(&pi_pos, p_pos, i_pos, out_max_pos);
+  // ------ < /REGULATORS > -------
 
   // ------ <Calibrate ADC> ----- 
   if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
@@ -345,16 +375,19 @@ char buffer[128];
       
       
       
-  // TIM1
+      
+  
+  // Enable main output (TIM1 needs it)
   __HAL_TIM_MOE_ENABLE(&htim1);
+  
   if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK) {
     Error_Handler();
   }
   
-  
-  // ----- <Calibrate current sensor offsets> -----
   pwm_set(0.5f, 0.5f, 0.5f);
   HAL_Delay(20);
+  
+  // Calibrate current sensor offsets
   if (driver_current_calibrate_offsets(&g_current_offsets,
     &ia_raw,
     &ib_raw,
@@ -364,41 +397,40 @@ char buffer[128];
       Error_Handler();
     }
     // Debug print current offsets
-    // sprintf(buffer, "offs A=%u B=%u C=%u valid=%u\r\n",
-    //   g_current_offsets.a,
-    //   g_current_offsets.b,
-    //   g_current_offsets.c,
-    //   g_current_offsets.valid ? 1 : 0);
-    // print(buffer);
-  // ----- </Calibrate current sensor offsets> -----
-  
-
-
-  // ----- <Calibrate electrical offset> ------
-  calibrate_electrical_offset(&encoder);
-  sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
-    (unsigned long)encoder.electrical_offset,
-    encoder.electrical_angle);
+    sprintf(buffer, "offs A=%u B=%u C=%u valid=%u\r\n",
+      g_current_offsets.a,
+      g_current_offsets.b,
+      g_current_offsets.c,
+      g_current_offsets.valid ? 1 : 0);
     print(buffer);
-  // ----- </Calibrate electrical offset> ------
+    // ------ </Calibrate ADC> ----- 
+
+    // ----- <Calibrate electrical offset> ------
+    calibrate_electrical_offset(&encoder);
+    sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
+      (unsigned long)encoder.electrical_offset,
+      encoder.electrical_angle);
+      print(buffer);
+    // ----- </Calibrate electrical offset> ------
         
 
-  if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
-    Error_Handler();
-  }
+    if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
+      Error_Handler();
+    }
 
-  
-  mt6835_init();
-  config.position_target = -encoder_get_turns(&encoder);
-  config.control_state = POSITION_CONTROL;
-  HAL_Delay(500);
-  
-  
-  // ---- < Can communication > ----
-  communication_init(&hcan);
-  communication_start();
-  can_message_t msg;
-  // ---- < /Can communication > ----
+    
+    mt6835_init();
+    foc_enabled = true;
+    config.target_position = -encoder_get_turns(&encoder);
+    HAL_Delay(500);
+    foc_enable_positional_control = true;
+    
+    
+    // ---- < Can communication > ----
+    communication_init(&hcan);
+    communication_start();
+    can_message_t msg;
+    // ---- < /Can communication > ----
 
 
 
@@ -421,16 +453,12 @@ char buffer[128];
     
     
     // PRINT THIS DATA
-    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, config.angular_velocity_target, config.torque_current_target*1000.0f);
-    // float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
-    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, config.angular_velocity_target);
-    // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
-    sprintf(buffer, "%f %f\r\n", config.position_target);
-    // sprintf("%d %d %d %d", NO_CONTROL, CURRENT_CONTROL, VELOCITY_CONTROL, POSITION_CONTROL);
+    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w, config.target_torque_current*1000.0f);
+    float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
+    sprintf(buffer, "%f %f %f\r\n", velocity_rpm, target_w);
     // sprintf(buffer, "%f %f %f\r\n", g_phase_currents.a*1000, g_phase_currents.b*1000, g_phase_currents.c*1000);
-    // sprintf(buffer, "%f %f %f\r\n", position, config.position_target, config.angular_velocity_target);
+    // sprintf(buffer, "%f %f %f\r\n", position, config.target_position, target_w);
     print(buffer);
-    HAL_Delay(10);
 
     // Timer frequency check
     // uint32_t now = HAL_GetTick();
@@ -447,60 +475,171 @@ char buffer[128];
 
 
     // // CAN COMUNICATION 
-
     if (communication_read(&msg))
     {
-      float p_pos, i_pos, d_pos, out_min_pos, out_max_pos;
       switch(msg.id){
         case SET_P:
-          memcpy(&p_pos, msg.data, sizeof(float));
+          memcpy(&p_i, msg.data, sizeof(float));
           // sprintf(buffer, "Setting p to %f \r\n", p_w);
           // print(buffer);
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos,  out_max_pos);
+          pi_init(&config.regulators.pi_d_axis, p_i, i_i, out_max_i);
+          pi_init(&config.regulators.pi_q_axis, p_i, i_i, out_max_i);
           break;
         case SET_I:
-          memcpy(&i_pos, msg.data, sizeof(float));
+          memcpy(&i_i, msg.data, sizeof(float));
           // sprintf(buffer, "Setting k to %f \r\n", i_w);
           // print(buffer);
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos, out_max_pos);
-          break;
-        case SET_D:
-          memcpy(&d_pos, msg.data, sizeof(float));
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos,  out_max_pos);
-          break;
-        case SET_MAX:
-          float new_torque_current_soft_limit;
-          memcpy(&new_torque_current_soft_limit, msg.data, sizeof(float));
-          set_torque_current_soft_limit(&config, new_torque_current_soft_limit);
+          pi_init(&config.regulators.pi_d_axis, p_i, i_i, out_max_i);
+          pi_init(&config.regulators.pi_q_axis, p_i, i_i, out_max_i);
           break;
         case SET_MIN:
-          float new_angular_velocity_soft_limit;
-          memcpy(&new_angular_velocity_soft_limit, msg.data, sizeof(float));
-          set_angular_velocity_soft_limit(&config, new_angular_velocity_soft_limit);
+          memcpy(&out_min_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+          // print(buffer);
+          pi_init(&config.regulators.pi_d_axis, p_i, i_i, out_max_i);
+          pi_init(&config.regulators.pi_q_axis, p_i, i_i, out_max_i);
+          break;
+        case SET_MAX:
+          memcpy(&out_max_i, msg.data, sizeof(float));
+          // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+          // print(buffer);
+          pi_init(&config.regulators.pi_d_axis, p_i, i_i, out_max_i);
+          pi_init(&config.regulators.pi_q_axis, p_i, i_i, out_max_i);
           break;
         case SET_TARGET_VELOCITY:
-          float new_angular_velocity_target;
-          memcpy(&new_angular_velocity_target, msg.data, sizeof(float));
-          set_angular_velocity_target(&config, new_angular_velocity_target);
+          // float target_w;
+          memcpy(&target_w, msg.data, sizeof(float));
 
+          // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+          // print(buffer);
           break;
-        case SET_TARGET_POS:
-          // float config.angular_velocity_target;
-          float new_position_target;
-          memcpy(&new_position_target, msg.data, sizeof(float));
-          set_position_target(&config, new_position_target);
-
+        case SET_ID_REF:
+          memcpy(&config.target_flux_current, msg.data, sizeof(float));
+          // pi_reset(config.regulators.pi_d_axis);
+          // pi_reset(&config.regulators.pi_q_axis);
+          // sprintf(buffer, "Setting config.target_flux_current to %f \r\n", config.target_flux_current);
+          // print(buffer);
           break;
         case SET_IQ_REF:
-          float new_torque_current_target;
-          memcpy(&new_torque_current_target, msg.data, sizeof(float));
-          set_torque_current_target(&config, new_torque_current_target);
+          memcpy(&config.target_torque_current, msg.data, sizeof(float));
+          // pi_reset(config.regulators.pi_d_axis);
+          // pi_reset(&config.regulators.pi_q_axis);
+          sprintf(buffer, "Setting config.target_torque_current to %f \r\n", config.target_torque_current);
+          print(buffer);
           break;
 
         default:
           print("Unknown command");
       }
     }
+
+
+    // Velocity
+    // if (communication_read(&msg))
+    // {
+    //   switch(msg.id){
+    //     case SET_P:
+    //       memcpy(&p_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting p to %f \r\n", p_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, i_w, out_max_w);
+    //       break;
+    //     case SET_I:
+    //       memcpy(&i_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting k to %f \r\n", i_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, i_w, out_max_w);
+    //       break;
+    //     case SET_D:
+    //       memcpy(&d_w, msg.data, sizeof(float));
+    //       pi_init(&pi_w, p_w, i_w, out_max_w);
+    //       break;
+    //     case SET_MIN:
+    //       memcpy(&out_min_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, i_w, out_max_w);
+    //       break;
+    //     case SET_MAX:
+    //       memcpy(&out_max_w, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+    //       // print(buffer);
+    //       pi_init(&pi_w, p_w, i_w, out_max_w);
+    //       break;
+    //     case SET_TARGET_VELOCITY:
+    //       // float target_w;
+    //       memcpy(&target_w, msg.data, sizeof(float));
+
+    //       // sprintf(buffer, "Setting target_w to %f \r\n", target_w);
+    //       // print(buffer);
+    //       break;
+    //     // case SET_ID_REF:
+    //     //   memcpy(&config.target_flux_current, msg.data, sizeof(float));
+    //     //   // sprintf(buffer, "Setting config.target_flux_current to %f \r\n", config.target_flux_current);
+    //     //   // print(buffer);
+    //     //   break;
+    //     case SET_IQ_REF:
+    //       memcpy(&config.target_torque_current, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting config.target_torque_current to %f \r\n", config.target_torque_current);
+    //       // print(buffer);
+    //       break;
+
+    //     default:
+    //       print("Unknown command");
+    //   }
+    // }
+
+    // // PID position
+    // if (communication_read(&msg))
+    // {
+    //   switch(msg.id){
+    //     case SET_P:
+    //       memcpy(&p_pos, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting p to %f \r\n", p_w);
+    //       // print(buffer);
+    //       pi_init(&pi_pos, p_pos, i_pos,   out_max_pos);
+    //       break;
+    //     case SET_I:
+    //       memcpy(&i_pos, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting k to %f \r\n", i_w);
+    //       // print(buffer);
+    //       pi_init(&pi_pos, p_pos, i_pos, out_max_pos);
+    //       break;
+    //     case SET_MIN:
+    //       memcpy(&out_min_pos, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_min to %f \r\n", out_min_w);
+    //       // print(buffer);
+    //       pi_init(&pi_pos, p_pos, i_pos, out_max_pos);
+    //       break;
+    //     case SET_MAX:
+    //       memcpy(&out_max_pos, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting out_max to %f \r\n", out_max_w);
+    //       // print(buffer);
+    //       pi_init(&pi_pos, p_pos, i_pos, out_max_pos);
+    //       break;
+    //     case SET_TARGET_VELOCITY:
+    //       // float target_w;
+    //       memcpy(&target_w, msg.data, sizeof(float));
+    //       break;
+    //     case SET_TARGET_POS:
+    //       // float target_w;
+    //       memcpy(&config.target_position, msg.data, sizeof(float));
+    //       break;
+    //     case SET_ID_REF:
+    //       memcpy(&config.target_flux_current, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting config.target_flux_current to %f \r\n", config.target_flux_current);
+    //       // print(buffer);
+    //       break;
+    //     case SET_IQ_REF:
+    //       memcpy(&config.target_torque_current, msg.data, sizeof(float));
+    //       // sprintf(buffer, "Setting config.target_torque_current to %f \r\n", config.target_torque_current);
+    //       // print(buffer);
+    //       break;
+
+    //     default:
+    //       print("Unknown command");
+    //   }
+    // }
   
 
   }
