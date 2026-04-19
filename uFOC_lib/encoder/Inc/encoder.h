@@ -14,7 +14,6 @@
 #define ENCODER_MAX_VEL_SAMPLES 64u
 
 
-
 typedef struct {
     bool invert_dir;
 
@@ -54,24 +53,23 @@ typedef struct {
 
 } encoder_t;
 
-// encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset);
 encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, bool invert_dir);
 
 void update_encoder(encoder_t* encoder);
 
-double encoder_get_turns(const encoder_t* e);
+float encoder_get_turns(const encoder_t* e);
 
 void update_electrical_offset(encoder_t* encoder, uint32_t new_offset);
 
 uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok);
 
-float get_angular_velocity(const encoder_t* encoder, float dt);
+float get_angular_velocity_raw(const encoder_t* encoder, float dt);
 
 float get_electrical_angle(encoder_t* encoder);
 
-/* Returns the moving average of the last num_samples angular-velocity values.
- * Direction inversion (invert_dir) is applied to the result so the sign
- * matches the motor's logical forward direction. */
+float get_angular_velocity(encoder_t* encoder);
+
+
 float get_velocity_moving_average(const encoder_t* encoder);
 
 void mt6835_init();

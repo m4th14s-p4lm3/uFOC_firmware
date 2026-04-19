@@ -83,15 +83,23 @@ target_link_libraries(pi_controller PUBLIC stm32cubemx)
 
 # CAN Communication
 add_library(communication STATIC)
-target_sources(communication PRIVATE uFOC_lib/communication/Src/communication.c)
+target_sources(communication PRIVATE
+    uFOC_lib/communication/Src/communication.c
+    uFOC_lib/communication/Src/commands.c
+)
 target_include_directories(communication PUBLIC uFOC_lib/communication/Inc)
 target_link_libraries(communication PUBLIC stm32cubemx)
+target_link_libraries(communication PUBLIC stm32cubemx config)
+target_link_libraries(communication PUBLIC stm32cubemx debug_utils)
+
 
 # Config
 add_library(config STATIC)
 target_sources(config PRIVATE uFOC_lib/config/Src/config.c)
 target_include_directories(config PUBLIC uFOC_lib/config/Inc)
 target_link_libraries(config PUBLIC stm32cubemx pi_controller)
+target_link_libraries(config PUBLIC stm32cubemx driver)
+target_link_libraries(config PUBLIC stm32cubemx encoder)
 
 
 # Add include paths

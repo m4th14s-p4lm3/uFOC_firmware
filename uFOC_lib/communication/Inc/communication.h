@@ -4,24 +4,14 @@
 #include "main.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "config.h"
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define SET_P 0x100
-#define SET_I 0x101
-#define SET_D 0x107
 
-#define SET_MIN 0x102
-#define SET_MAX 0x103
-
-#define SET_TARGET_VELOCITY 0x104
-
-#define SET_ID_REF 0x105
-#define SET_IQ_REF 0x106
-
-#define SET_TARGET_POS 0x108
 
 typedef struct
 {
@@ -32,6 +22,14 @@ typedef struct
     uint8_t is_remote;
 } can_message_t;
 
+
+
+// Data 
+// byte 0 - device ID 
+// byte 1 - command
+// byte 2 - 7 - data based on data type 
+
+
 void communication_init(CAN_HandleTypeDef *hcan);
 HAL_StatusTypeDef communication_start(void);
 
@@ -41,6 +39,8 @@ HAL_StatusTypeDef communication_send_test(void);
 bool communication_message_available(void);
 bool communication_read(can_message_t *msg);
 
+
+
 void communication_rx_fifo0_pending_callback(CAN_HandleTypeDef *hcan);
 
 #ifdef __cplusplus
@@ -48,3 +48,19 @@ void communication_rx_fifo0_pending_callback(CAN_HandleTypeDef *hcan);
 #endif
 
 #endif
+
+
+
+// #define SET_P 0x100
+// #define SET_I 0x101
+// #define SET_D 0x107
+
+// #define SET_MIN 0x102
+// #define SET_MAX 0x103
+
+// #define SET_TARGET_VELOCITY 0x104
+
+// #define SET_ID_REF 0x105
+// #define SET_IQ_REF 0x106
+
+// #define SET_TARGET_POS 0x108

@@ -37,6 +37,7 @@
 #include "pi_controller.h"
 
 #include "communication.h"
+#include "commands.h"
 
 #include "config.h"
 
@@ -110,29 +111,20 @@ static void MX_TIM6_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// READ SENSE ADC
 volatile uint16_t ia_raw, ib_raw, ic_raw; // Raw ADC currents
 volatile float ia, ib, ic;                // Measured currents 
 float va, vb, vc;                         // Output voltages
 
+config_t config; // Global config
 
-encoder_t encoder;
-// volatile float config.angular_velocity_target = 0;
-
-// volatile float config.position_target = 0;
-// PIDController config.regulators.pid_position;
-
-config_t config;
-
-
-
-
-
+  
 // volatile uint32_t adc_inj_cb_count = 0;
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance != TIM6) return;
+    handle_communication(&config);
+
     // // adc_inj_cb_count++;
     if (config.angular_velocity_target < -1000) return; // HACK - REMOVE LATER!
     if (config.control_state == NO_CONTROL) return;
@@ -141,18 +133,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     // ---- < Position PID control > -----
     if (config.control_state >= POSITION_CONTROL){
-      float position = -encoder_get_turns(&encoder);
+      float position = encoder_get_turns(&config.encoder);
       float error_pos = config.position_target - position;
       config.angular_velocity_target = pid_update(&config.regulators.pid_position, error_pos, dt);
     }
 
     // ---- < Velocity PI control > ----
     if (config.control_state >= VELOCITY_CONTROL){
-      float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
+      // float velocity_rpm = config.encoder.angular_velocity_ewma * 9.55741f;
+      float velocity_rpm = get_angular_velocity(&config.encoder) * 9.55741f;
       float error_w = config.angular_velocity_target - velocity_rpm;
       config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
     }
-  }
+}
 
 
 void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
@@ -173,14 +166,14 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         ib = g_phase_currents.b;
         ic = g_phase_currents.c;
 
-    update_encoder(&encoder);
+    update_encoder(&config.encoder);
 
     if (config.control_state >= CURRENT_CONTROL){
       // FOC control loop
-      float theta_e = encoder.electrical_angle;
+      float theta_e = config.encoder.electrical_angle;
       foc_compute_voltages(config.flux_current_target, config.torque_current_target, // reference currents for PI regulator
                     &theta_e, // measured electric angle
-                        &ia, &ib, &ic, // measured input current
+                        (float*)&ia, (float*)&ib, (float*)&ic, // measured input current
                         &va, &vb, &vc, // calculated output voltage
                       &config.regulators.pi_d_current_axis, &config.regulators.pi_q_current_axis); // PI config.regulators
 
@@ -216,6 +209,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
     float v_alpha, v_beta;
 
     inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
+    // inv_park_transform(0.0f, 0.4f, 0.0f, &v_alpha, &v_beta);
     inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 
     float du = 0.5f + va;
@@ -309,7 +303,7 @@ char buffer[128];
   init_sin_table();
   drv8316_init(&g_drv_cfg);
   HAL_Delay(300);
-  encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, 2074833, ENCODER_INVERT_DIR); // offset=2074833 elec_angle=6.273562
+  config.encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, ENCODER_ELECTRICAL_OFFSET, ENCODER_INVERT_DIR);
   mt6835_init();
 
 
@@ -326,22 +320,22 @@ char buffer[128];
   
   
   // DEBUG: Read DRV8316 status registers
-  // drv8316_status_t drv_status = {0};
-  // if (drv8316_read_status(&drv_status) != HAL_OK) {
-  //       print("DRV status read failed\r\n");
-  //   } else {
-  //         sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
-  //           drv_status.ic_status,
-  //           drv_status.status1,
-  //           (uint8_t)(drv_status.status2 & 0x7F));
-  //         print(buffer);
-  //     }
-  //     if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
-  //     if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
-  //     if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
-  //     if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
-  //     if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
-  //     if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
+  drv8316_status_t drv_status = {0};
+  if (drv8316_read_status(&drv_status) != HAL_OK) {
+        print("DRV status read failed\r\n");
+    } else {
+          sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
+            drv_status.ic_status,
+            drv_status.status1,
+            (uint8_t)(drv_status.status2 & 0x7F));
+          print(buffer);
+      }
+      if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
+      if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
+      if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
+      if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
+      if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
+      if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
       
       
       
@@ -373,12 +367,12 @@ char buffer[128];
   // ----- </Calibrate current sensor offsets> -----
   
 
-
+  mt6835_init();
   // ----- <Calibrate electrical offset> ------
-  calibrate_electrical_offset(&encoder);
+  calibrate_electrical_offset(&config.encoder);
   sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
-    (unsigned long)encoder.electrical_offset,
-    encoder.electrical_angle);
+    (unsigned long)config.encoder.electrical_offset,
+    config.encoder.electrical_angle);
     print(buffer);
   // ----- </Calibrate electrical offset> ------
         
@@ -388,8 +382,8 @@ char buffer[128];
   }
 
   
-  mt6835_init();
-  config.position_target = -encoder_get_turns(&encoder);
+  // mt6835_init();
+  config.position_target = -encoder_get_turns(&config.encoder);
   config.control_state = POSITION_CONTROL;
   HAL_Delay(500);
   
@@ -413,24 +407,21 @@ char buffer[128];
   while (1){
 
 
-    char buffer[128];
-    // float velocity_rpm = get_velocity_moving_average(&encoder) * 9.55741f;
-    float position = -encoder_get_turns(&encoder);
+    // char buffer[128];
+    // handle_communication();
+    // float velocity_rpm = get_velocity_moving_average(&config.encoder) * 9.55741f;
+    // float position = -encoder_get_turns(&config.encoder);
     
     
     
     
     // PRINT THIS DATA
-    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, config.angular_velocity_target, config.torque_current_target*1000.0f);
-    // float velocity_rpm = -encoder.angular_velocity_ewma * 9.55741f;
-    // sprintf(buffer, "%f %f %f\r\n", velocity_rpm, config.angular_velocity_target);
-    // sprintf(buffer, "%d\r\n", encoder.current_raw_value);
-    sprintf(buffer, "%f %f\r\n", config.position_target);
-    // sprintf("%d %d %d %d", NO_CONTROL, CURRENT_CONTROL, VELOCITY_CONTROL, POSITION_CONTROL);
-    // sprintf(buffer, "%f %f %f\r\n", g_phase_currents.a*1000, g_phase_currents.b*1000, g_phase_currents.c*1000);
-    // sprintf(buffer, "%f %f %f\r\n", position, config.position_target, config.angular_velocity_target);
-    print(buffer);
-    HAL_Delay(10);
+    // float velocity_rpm = -config.encoder.angular_velocity_ewma * 9.55741f;
+    
+    // sprintf(buffer, "%d\r\n", config.encoder.current_raw_value);
+    // sprintf(buffer, "%f %f %f %f\r\n", config.angular_velocity_target, config.angular_velocity_soft_limit, config.torque_current_target, velocity_rpm);
+    // print(buffer);
+    // HAL_Delay(10);
 
     // Timer frequency check
     // uint32_t now = HAL_GetTick();
@@ -444,64 +435,6 @@ char buffer[128];
     //     last_count = cnt;
     //     last_ms = now;
     // }
-
-
-    // // CAN COMUNICATION 
-
-    if (communication_read(&msg))
-    {
-      float p_pos, i_pos, d_pos, out_min_pos, out_max_pos;
-      switch(msg.id){
-        case SET_P:
-          memcpy(&p_pos, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting p to %f \r\n", p_w);
-          // print(buffer);
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos,  out_max_pos);
-          break;
-        case SET_I:
-          memcpy(&i_pos, msg.data, sizeof(float));
-          // sprintf(buffer, "Setting k to %f \r\n", i_w);
-          // print(buffer);
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos, out_max_pos);
-          break;
-        case SET_D:
-          memcpy(&d_pos, msg.data, sizeof(float));
-          pid_init(&config.regulators.pid_position, p_pos, i_pos, d_pos,  out_max_pos);
-          break;
-        case SET_MAX:
-          float new_torque_current_soft_limit;
-          memcpy(&new_torque_current_soft_limit, msg.data, sizeof(float));
-          set_torque_current_soft_limit(&config, new_torque_current_soft_limit);
-          break;
-        case SET_MIN:
-          float new_angular_velocity_soft_limit;
-          memcpy(&new_angular_velocity_soft_limit, msg.data, sizeof(float));
-          set_angular_velocity_soft_limit(&config, new_angular_velocity_soft_limit);
-          break;
-        case SET_TARGET_VELOCITY:
-          float new_angular_velocity_target;
-          memcpy(&new_angular_velocity_target, msg.data, sizeof(float));
-          set_angular_velocity_target(&config, new_angular_velocity_target);
-
-          break;
-        case SET_TARGET_POS:
-          // float config.angular_velocity_target;
-          float new_position_target;
-          memcpy(&new_position_target, msg.data, sizeof(float));
-          set_position_target(&config, new_position_target);
-
-          break;
-        case SET_IQ_REF:
-          float new_torque_current_target;
-          memcpy(&new_torque_current_target, msg.data, sizeof(float));
-          set_torque_current_target(&config, new_torque_current_target);
-          break;
-
-        default:
-          print("Unknown command");
-      }
-    }
-  
 
   }
     

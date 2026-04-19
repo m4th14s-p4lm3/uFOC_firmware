@@ -1,6 +1,8 @@
 #include "communication.h"
-
 #include <string.h>
+#include "debug_utils.h"
+#include <stdio.h>
+#include "commands.h"
 
 static CAN_HandleTypeDef *s_hcan = NULL;
 
@@ -143,3 +145,4 @@ void communication_rx_fifo0_pending_callback(CAN_HandleTypeDef *hcan)
     memcpy(s_last_rx_msg.data, rx_data, s_last_rx_msg.dlc);
     s_msg_available = 1;
 }
+

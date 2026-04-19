@@ -6,24 +6,14 @@
 #define ENC_CS_GPIO_Port GPIOA
 #define ENC_CS_Pin       GPIO_PIN_5
 
-// #define MAX_ENCODER_RAW_VALUE 2097151u
-// #define ENC_MODULO            (MAX_ENCODER_RAW_VALUE + 1u)   // 2097152
-// #define ENC_HALF_MODULO       (ENC_MODULO / 2u)              // 1048576
-
-
 extern SPI_HandleTypeDef hspi3;
 
 /* -------------------------------------------------------------------------- */
 /* CRC-8 pro MT6835                                                           */
 /* -------------------------------------------------------------------------- */
 
-/* Nastav na 0 pro dočasné vypnutí CRC (debug). */
 #define MT6835_CRC_ENABLED  1
 
-/* MT6835 CRC-8, polynomial 0x07, init 0x00.
- * Pokryté bajty: rx[2], rx[3], rx[4] (reg 0x003–0x005).
- * Pokud crc_error_count stále roste, zkus změnit CRC_INIT nebo rozsah
- * bajtů — ověř v datasheetu MT6835 sekci "CRC Check". */
 #define MT6835_CRC_INIT     0x00u
 #define MT6835_CRC_POLY     0x07u
 
@@ -80,7 +70,6 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
     encoder.ewma_previous_value = (float)new_raw_value;
     encoder.ewma_value = (float)new_raw_value;
     encoder.ewma_alpha = 0.8f;
-    // encoder.ewma_alpha = 0.05f;
     encoder.ewma_delta = 0.0f;
     
     encoder.position_ticks = new_raw_value;
@@ -147,7 +136,7 @@ void update_encoder(encoder_t* encoder){
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
-    encoder->angular_velocity = get_angular_velocity(encoder, 0.0002f); // unit is RADIANS - NOTE: Add "dt" property to init!
+    encoder->angular_velocity = get_angular_velocity_raw(encoder, 0.0002f); // unit is RADIANS - NOTE: Add "dt" property to init!
     encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
                                         (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     
@@ -196,8 +185,10 @@ void update_electrical_offset(encoder_t* encoder, uint32_t new_offset){
     encoder->electrical_offset = new_offset;
 }
 
-double encoder_get_turns(const encoder_t* e) {
-    return (double)e->position_ticks / (double)ENC_MODULO;
+float encoder_get_turns(const encoder_t* encoder) {
+    float sign = 1;
+    if (encoder->invert_dir) sign = -1;
+    return sign * (float)encoder->position_ticks / (float)ENC_MODULO;
 }
 
 
@@ -273,10 +264,17 @@ float get_velocity_moving_average(const encoder_t* encoder)
 }
 
 // angular velocity in radians per second
-float get_angular_velocity(const encoder_t* encoder, float dt){
+float get_angular_velocity_raw(const encoder_t* encoder, float dt){
     if (!encoder || dt <= 0.0f) return 0.0f;
+    float sign = 1;
+    if (encoder->invert_dir) sign = -1;
+
 
     float delta_ticks = encoder->ewma_delta;
     float velocity = (delta_ticks / dt) * ((2.0f * 3.14159265359f) / (float)ENC_MODULO);
-    return velocity;
+    return sign * velocity;
+}
+
+float get_angular_velocity(encoder_t* encoder){
+    return encoder->angular_velocity_ewma;
 }
