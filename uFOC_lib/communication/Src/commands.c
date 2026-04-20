@@ -35,6 +35,20 @@ void handle_communication(config_t* config){
             set_control_state(config, new_control_state);
             break;
 
+        case SET_USER_ANGLE_UNITS:
+            enum AngleUnits new_user_angle_units = (enum AngleUnits)msg.data[2];
+            set_user_angle_units(config, new_user_angle_units);
+            break; 
+        case GET_USER_ANGLE_UNITS:
+            enum AngleUnits user_angle_units = get_user_angle_units(config);
+            data[0] = CAN_COMMUNICATION_DEVICE_ID;
+            data[1] = command;
+            data[2] = (uint8_t)user_angle_units;
+            sprintf(buffer, "%d\r\n", user_angle_units);
+            print(buffer);
+            communication_send(CAN_COMMUNICATION_STD_ID, data, 3);
+            break;
+
         case SET_TORQUE_CURRENT_TARGET:
             float new_torque_current_target = get_float_value_from_message(&msg);
             set_torque_current_target(config, new_torque_current_target);
@@ -73,6 +87,8 @@ void handle_communication(config_t* config){
 
         case GET_ANGULAR_VELOCITY_SOFT_LIMIT:
             float angular_velocity_soft_limit = get_angular_velocity_soft_limit(config);
+            assemble_data_with_float_value(command, angular_velocity_soft_limit);
+            communication_send(CAN_COMMUNICATION_STD_ID, data, 6);
 
             break;
         case GET_ANGULAR_VELOCITY:
@@ -95,8 +111,6 @@ void handle_communication(config_t* config){
         case SET_POSITION_TARGET:
             float new_position_target = get_float_value_from_message(&msg);
             set_position_target(config, new_position_target);
-            sprintf(buffer, "Position target %f\r\n", new_position_target);
-            print(buffer);
             break;
 
         case GET_POSITION_TARGET:
@@ -132,18 +146,19 @@ void handle_communication(config_t* config){
             break;
 
         case GET_ELECTRICAL_OFFSET:
-            float electrical_offset = config->encoder.electrical_offset;
-            assemble_data_with_float_value(GET_POSITION, electrical_offset);
+            float electrical_offset = get_electrical_offset(config);
+            assemble_data_with_float_value(command, electrical_offset);
             communication_send(CAN_COMMUNICATION_STD_ID, data, 6);
             break;
 
         case SET_ELECTRICAL_OFFSET:
             float new_electrical_offset = get_float_value_from_message(&msg);
-            update_electrical_offset(&config->encoder, new_electrical_offset);
+            set_electrical_offset(config, new_electrical_offset);
             break;
         
         case CALIBRATE_ELECTRICAL_OFFSET:
-            
+            set_control_state(config, NO_CONTROL);
+            calibrate_electrical_offset(&config->encoder);
             break;
     }
 

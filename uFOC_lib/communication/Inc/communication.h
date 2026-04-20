@@ -51,16 +51,3 @@ void communication_rx_fifo0_pending_callback(CAN_HandleTypeDef *hcan);
 
 
 
-// #define SET_P 0x100
-// #define SET_I 0x101
-// #define SET_D 0x107
-
-// #define SET_MIN 0x102
-// #define SET_MAX 0x103
-
-// #define SET_TARGET_VELOCITY 0x104
-
-// #define SET_ID_REF 0x105
-// #define SET_IQ_REF 0x106
-
-// #define SET_TARGET_POS 0x108

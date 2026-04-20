@@ -73,4 +73,9 @@ float get_angular_velocity(encoder_t* encoder);
 float get_velocity_moving_average(const encoder_t* encoder);
 
 void mt6835_init();
+
+
+void calibrate_electrical_offset(encoder_t* encoder);
+
+
 #endif

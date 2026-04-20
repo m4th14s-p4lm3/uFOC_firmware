@@ -2,6 +2,8 @@
 #include "pi_controller.h"
 #include "driver.h"
 
+#define M_PI 3.14159265359f
+
 config_t init_config(){
     config_t config = {
         .torque_current_target = 0.0f,
@@ -12,7 +14,8 @@ config_t init_config(){
 
         .angular_velocity_target = 0.0f,
         .angular_velocity_soft_limit = PI_VELOCITY_SOFT_LIMIT,
-        .position_target = 0.0f
+        .position_target = 0.0f,
+        .user_angle_units = DEFAULT_USER_UNITS
     };
 
     // ---- < INIT REGULATORS > -----
@@ -61,6 +64,7 @@ void set_current_ki(config_t* config, float new_ki){
 }
 
 float get_torque_current_soft_limit(config_t* config){
+    float torque_current_soft_limit = config->torque_current_soft_limit;
     return config->torque_current_soft_limit;
 }
 // ---- </CURRENT SETTERS/GETTERS> ----
@@ -68,11 +72,16 @@ float get_torque_current_soft_limit(config_t* config){
 
 // ---- <ANGULAR VELOCITY SETTERS/GETTERS> -----
 void set_angular_velocity_target(config_t* config, float new_angular_velocity_target){
+    new_angular_velocity_target = convert_user_units_to_rotations(config, new_angular_velocity_target);
+
+
     new_angular_velocity_target = clampf(new_angular_velocity_target, -config->angular_velocity_soft_limit, config->angular_velocity_soft_limit);
     config->angular_velocity_target = new_angular_velocity_target;
 }
 
 void set_angular_velocity_soft_limit(config_t* config, float new_angular_velocity_soft_limit){
+    new_angular_velocity_soft_limit = convert_user_units_to_rotations(config, new_angular_velocity_soft_limit);
+    
     new_angular_velocity_soft_limit = clampf(new_angular_velocity_soft_limit, -PI_VELOCITY_HARD_LIMIT, PI_VELOCITY_HARD_LIMIT); // Clamp HARD LIMIT
     config->angular_velocity_soft_limit = new_angular_velocity_soft_limit;
     pid_set_out_max(&config->regulators.pid_position, new_angular_velocity_soft_limit);
@@ -81,7 +90,9 @@ void set_angular_velocity_soft_limit(config_t* config, float new_angular_velocit
 }
 
 float get_angular_velocity_soft_limit(config_t* config){
-    return config->angular_velocity_soft_limit;
+    float angular_velocity_soft_limit = config->angular_velocity_soft_limit;
+    angular_velocity_soft_limit = convert_rotations_to_user_units(config, angular_velocity_soft_limit);
+    return angular_velocity_soft_limit;
 }
 
 void set_angular_velocity_kp(config_t* config, float new_kp){
@@ -96,15 +107,20 @@ void set_angular_velocity_ki(config_t* config, float new_ki){
 
 // ----- <POSITION SETTERS/GETTERS> ------
 void set_position_target(config_t* config, float new_position_target){
+    new_position_target = convert_user_units_to_rotations(config, new_position_target);
+
     config->position_target = new_position_target;
 }
 
 float get_position_target(config_t* config){
-    return config->position_target;
+    float position_target = config->position_target;
+    position_target = convert_rotations_to_user_units(config, position_target);
+    return position_target;
 }
 
 float get_position(config_t* config){
     float position = encoder_get_turns(&config->encoder);
+    position = convert_rotations_to_user_units(config, position);
 
     return position;
 }
@@ -120,4 +136,78 @@ void set_position_kd(config_t* config, float new_kd){
 }
 
 // ----- </POSITION SETTERS/GETTERS> ------
+
+
+// ---- <encoder> -----
+float get_electrical_offset(config_t* config){
+    float electrical_offset = config->encoder.electrical_offset;
+    return electrical_offset;
+}
+
+float set_electrical_offset(config_t* config, float new_electrical_offset){
+    update_electrical_offset(&config->encoder, new_electrical_offset);
+}
+// ---- </encoder> -----
+
+
+
+// ---- <Unit conversion utils> -----
+void set_user_angle_units(config_t* config, enum AngleUnits new_user_angle_units){
+    config->user_angle_units = new_user_angle_units;
+}
+
+enum AngleUnits get_user_angle_units(config_t* config){
+    return config->user_angle_units;
+}
+
+
+float convert_rotations_to_user_units(config_t* config, float value_to_convert){ // FOR GETTERS with angles
+    switch(config->user_angle_units){
+        case RADIANS:
+            return rotations_to_radians(value_to_convert);
+            break;
+        case ROTATIONS:
+            return value_to_convert;
+            break;
+        case DEGREES:
+            return rotations_to_degrees(value_to_convert);
+            break;
+    }
+    // return value_to_convert;
+}
+
+float rotations_to_radians(float rotations){
+    return rotations * 2.0f*M_PI;
+}
+float rotations_to_degrees(float rotations_value){
+    return rotations_value * 360.0f;
+}
+
+
+
+float convert_user_units_to_rotations(config_t* config, float value_to_convert){ // FOR SETTERS with angles
+    switch(config->user_angle_units){
+        case RADIANS:
+            return radians_to_rotations(value_to_convert);
+            break;
+        case ROTATIONS:
+            return value_to_convert;
+            break;
+        case DEGREES:
+            return degrees_to_rotations(value_to_convert);
+            break;
+    }
+    // return value_to_convert;
+}
+
+float radians_to_rotations(float radian_value){
+    return radian_value / (2.0f * M_PI);
+}
+
+float degrees_to_rotations(float degrees_value){
+    return degrees_value / 360.0f;
+}
+
+// ---- </Unit conversion utils> -----
+
 

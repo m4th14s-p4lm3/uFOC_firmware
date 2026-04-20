@@ -52,6 +52,8 @@ add_library(encoder STATIC)
 target_sources(encoder PRIVATE uFOC_lib/encoder/Src/encoder.c)
 target_include_directories(encoder PUBLIC uFOC_lib/encoder/Inc)
 target_link_libraries(encoder PUBLIC stm32cubemx)
+target_link_libraries(encoder PUBLIC stm32cubemx foc)
+target_link_libraries(encoder PUBLIC stm32cubemx driver)
 
 
 # Driver

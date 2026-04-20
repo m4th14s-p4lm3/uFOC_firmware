@@ -2,6 +2,24 @@
 #include "encoder.h"
 #include "stm32f3xx_hal.h"
 #include <math.h>
+#include "foc.h"
+#include "driver.h"
+
+/* DWT-based delay — funguje i uvnitř ISR, nepotřebuje SysTick */
+static void DWT_Delay_ms(uint32_t ms)
+{
+    /* Povolení DWT čítače pokud ještě není */
+    if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+        DWT->CYCCNT = 0;
+    }
+    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    }
+    uint32_t start = DWT->CYCCNT;
+    uint32_t ticks = ms * (SystemCoreClock / 1000U);
+    while ((DWT->CYCCNT - start) < ticks);
+}
 
 #define ENC_CS_GPIO_Port GPIOA
 #define ENC_CS_Pin       GPIO_PIN_5
@@ -84,14 +102,14 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
     encoder.last_good_raw = new_raw_value;
     encoder.crc_error_count = 0u;
 
-    /* Velocity moving-average buffer — default window = 8 samples */
-    encoder.num_samples   = 8u;
-    encoder.vel_buf_head  = 0u;
-    encoder.vel_buf_count = 0u;
-    for (uint8_t i = 0u; i < ENCODER_MAX_VEL_SAMPLES; i++) {
-        encoder.vel_buf[i] = 0.0f;
-    }
-    // spi3_configure_for_encoder();
+    // /* Velocity moving-average buffer — default window = 8 samples */
+    // encoder.num_samples   = 8u;
+    // encoder.vel_buf_head  = 0u;
+    // encoder.vel_buf_count = 0u;
+    // for (uint8_t i = 0u; i < ENCODER_MAX_VEL_SAMPLES; i++) {
+    //     encoder.vel_buf[i] = 0.0f;
+    // }
+    // // spi3_configure_for_encoder();
 
     return encoder;
 }
@@ -161,7 +179,7 @@ void update_encoder(encoder_t* encoder){
 
     encoder->electrical_angle_raw = (uint32_t)elec_raw_i;
     encoder->electrical_angle =
-        (2.0f * 3.14159265359f * (float)elec_raw_i) / (float)ENC_MODULO;
+        (2.0f * M_PI * (float)elec_raw_i) / (float)ENC_MODULO;
 
     if (encoder->invert_dir){
         encoder->electrical_angle = -(encoder->electrical_angle - 2 * M_PI);
@@ -239,31 +257,31 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
     return raw;
 }
 
-/* Returns the moving average of the last num_samples angular-velocity readings.
- * The sign is flipped when invert_dir is set, consistent with the logical
- * motor direction convention used for electrical_angle. */
-float get_velocity_moving_average(const encoder_t* encoder)
-{
-    if (!encoder) return 0.0f;
+// /* Returns the moving average of the last num_samples angular-velocity readings.
+//  * The sign is flipped when invert_dir is set, consistent with the logical
+//  * motor direction convention used for electrical_angle. */
+// float get_velocity_moving_average(const encoder_t* encoder)
+// {
+//     if (!encoder) return 0.0f;
 
-    uint8_t count = encoder->vel_buf_count;
-    if (count == 0u) return 0.0f;
+//     uint8_t count = encoder->vel_buf_count;
+//     if (count == 0u) return 0.0f;
 
-    float sum = 0.0f;
-    for (uint8_t i = 0u; i < count; i++) {
-        sum += encoder->vel_buf[i];
-    }
+//     float sum = 0.0f;
+//     for (uint8_t i = 0u; i < count; i++) {
+//         sum += encoder->vel_buf[i];
+//     }
 
-    float avg = sum / (float)count;
+//     float avg = sum / (float)count;
 
-    if (encoder->invert_dir) {
-        avg = -avg;
-    }
+//     if (encoder->invert_dir) {
+//         avg = -avg;
+//     }
 
-    return avg;
-}
+//     return avg;
+// }
 
-// angular velocity in radians per second
+// angular velocity in rotations per second
 float get_angular_velocity_raw(const encoder_t* encoder, float dt){
     if (!encoder || dt <= 0.0f) return 0.0f;
     float sign = 1;
@@ -271,10 +289,66 @@ float get_angular_velocity_raw(const encoder_t* encoder, float dt){
 
 
     float delta_ticks = encoder->ewma_delta;
-    float velocity = (delta_ticks / dt) * ((2.0f * 3.14159265359f) / (float)ENC_MODULO);
+    float velocity = (delta_ticks / dt) * (1.0f / (float)ENC_MODULO);
     return sign * velocity;
 }
 
 float get_angular_velocity(encoder_t* encoder){
     return encoder->angular_velocity_ewma;
+}
+
+
+  void calibrate_electrical_offset(encoder_t* encoder){
+    // THIS IS A BLOCKING FUNCTION 
+    // YOU SHOULD SET CONTROL STATE TO NO_CONTROL BEFORE CALLING THIS FUNCITON!
+    if (!encoder) return;
+    DWT_Delay_ms(3);
+
+    float v_alpha, v_beta;
+    float va, vb, vc;
+
+    inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
+    inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
+
+    float du = 0.5f + va;
+    float dv = 0.5f + vb;
+    float dw = 0.5f + vc;
+    pwm_set(du, dv, dw);
+
+    DWT_Delay_ms(3);
+
+    uint32_t first = 0;
+    int32_t acc = 0;
+    int32_t prev = 0;
+    uint16_t num_samples = 500;
+    for (int i = 0; i < num_samples; i++) {
+        update_encoder(encoder);
+        int32_t x = (int32_t)encoder->current_raw_value;
+
+        if (i == 0) {
+            first = (uint32_t)x;
+            prev = x;
+            acc = x;
+        } else {
+            int32_t dx = x - prev;
+            if (dx > (int32_t)ENC_HALF_MODULO)  x -= (int32_t)ENC_MODULO;
+            if (dx < -(int32_t)ENC_HALF_MODULO) x += (int32_t)ENC_MODULO;
+            acc += x;
+            prev = x;
+        }
+
+        DWT_Delay_ms(2);
+    }
+
+    int32_t avg = acc / num_samples;
+    while (avg < 0) avg += (int32_t)ENC_MODULO;
+    while (avg >= (int32_t)ENC_MODULO) avg -= (int32_t)ENC_MODULO;
+
+    uint32_t mech_raw_aligned = (uint32_t)avg;
+    uint32_t mech_elec_raw =
+        (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
+
+    update_electrical_offset(encoder, mech_elec_raw);
+
+    pwm_set(0.5f, 0.5f, 0.5f);
 }

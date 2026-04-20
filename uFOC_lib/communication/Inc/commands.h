@@ -5,6 +5,8 @@
 #include "communication.h"
 
 #define SET_CONTROL_STATE 0x00
+#define SET_USER_ANGLE_UNITS 0x01
+#define GET_USER_ANGLE_UNITS 0X02
 
 
 // Current control
@@ -12,8 +14,8 @@
 #define SET_TORQUE_CURRENT_SOFT_LIMIT 0x07
 #define GET_TORQUE_CURRENT_SOFT_LIMIT 0x08
 
-#define SET_CURRENT_KP 0x09 // United for TORQUE and FLUX currents
-#define SET_CURRENT_KI 0x0A // United for TORQUE and FLUX currents
+#define SET_CURRENT_KP 0x09 // United for TORQUE and FLUX currents control
+#define SET_CURRENT_KI 0x0A // United for TORQUE and FLUX currents control
 
 
 // Velocity control
@@ -43,11 +45,7 @@
 #define CALIBRATE_ELECTRICAL_OFFSET 0x28
 
 
-
 void handle_communication(config_t* config);
-
-
-
 
 
 #endif

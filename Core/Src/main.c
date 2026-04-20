@@ -113,9 +113,9 @@ static void MX_TIM6_Init(void);
 
 volatile uint16_t ia_raw, ib_raw, ic_raw; // Raw ADC currents
 volatile float ia, ib, ic;                // Measured currents 
-float va, vb, vc;                         // Output voltages
+volatile float va, vb, vc;                // Output voltages before SVPWM
 
-config_t config; // Global config
+volatile config_t config; // Global config
 
   
 // volatile uint32_t adc_inj_cb_count = 0;
@@ -123,7 +123,7 @@ config_t config; // Global config
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance != TIM6) return;
-    handle_communication(&config);
+    // handle_communication(&config);
 
     // // adc_inj_cb_count++;
     if (config.angular_velocity_target < -1000) return; // HACK - REMOVE LATER!
@@ -141,17 +141,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // ---- < Velocity PI control > ----
     if (config.control_state >= VELOCITY_CONTROL){
       // float velocity_rpm = config.encoder.angular_velocity_ewma * 9.55741f;
-      float velocity_rpm = get_angular_velocity(&config.encoder) * 9.55741f;
+      // float velocity_rpm = get_angular_velocity(&config.encoder) * 9.55741f;
+      // float velocity_rpm = get_angular_velocity(&config.encoder) * 60;
+      float velocity_rpm = get_angular_velocity(&config.encoder);
       float error_w = config.angular_velocity_target - velocity_rpm;
       config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
     }
 }
 
 
-void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc) {
+    // Current FOC control
     if (hadc->Instance != ADC1) return;
     // adc_inj_cb_count++;
+    // ----- <Read currents from ADC> ------
     ic_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_1);
     ib_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_2);
     ia_raw = (uint16_t)HAL_ADCEx_InjectedGetValue(hadc, ADC_INJECTED_RANK_3);
@@ -165,9 +168,10 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         ia = g_phase_currents.a;
         ib = g_phase_currents.b;
         ic = g_phase_currents.c;
+    // ----- <Read currents from ADC> ------
 
     update_encoder(&config.encoder);
-
+    
     if (config.control_state >= CURRENT_CONTROL){
       // FOC control loop
       float theta_e = config.encoder.electrical_angle;
@@ -198,62 +202,11 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
   // ------- < CAN COMUNICATION > ----------- 
   void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
       communication_rx_fifo0_pending_callback(hcan);
-  }
+      handle_communication(&config);
+    
+    }
   // ------- < / CAN COMUNICATION > ----------- 
 
-
-
-  void calibrate_electrical_offset(encoder_t* encoder){
-    if (!encoder) return;
-
-    float v_alpha, v_beta;
-
-    inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
-    // inv_park_transform(0.0f, 0.4f, 0.0f, &v_alpha, &v_beta);
-    inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
-
-    float du = 0.5f + va;
-    float dv = 0.5f + vb;
-    float dw = 0.5f + vc;
-    pwm_set(du, dv, dw);
-
-    HAL_Delay(800);
-
-    uint32_t first = 0;
-    int32_t acc = 0;
-    int32_t prev = 0;
-
-    for (int i = 0; i < 300; i++) {
-        update_encoder(encoder);
-        int32_t x = (int32_t)encoder->current_raw_value;
-
-        if (i == 0) {
-            first = (uint32_t)x;
-            prev = x;
-            acc = x;
-        } else {
-            int32_t dx = x - prev;
-            if (dx > (int32_t)ENC_HALF_MODULO)  x -= (int32_t)ENC_MODULO;
-            if (dx < -(int32_t)ENC_HALF_MODULO) x += (int32_t)ENC_MODULO;
-            acc += x;
-            prev = x;
-        }
-
-        HAL_Delay(2);
-    }
-
-    int32_t avg = acc / 300;
-    while (avg < 0) avg += (int32_t)ENC_MODULO;
-    while (avg >= (int32_t)ENC_MODULO) avg -= (int32_t)ENC_MODULO;
-
-    uint32_t mech_raw_aligned = (uint32_t)avg;
-    uint32_t mech_elec_raw =
-        (uint32_t)(((uint64_t)mech_raw_aligned * encoder->magnetic_pole_pairs) % ENC_MODULO);
-
-    update_electrical_offset(encoder, mech_elec_raw);
-
-    pwm_set(0.5f, 0.5f, 0.5f);
-}
 
 
 char buffer[128];
@@ -297,7 +250,7 @@ char buffer[128];
   MX_ADC1_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
-  
+
   config = init_config();  // initialize config
 
   init_sin_table();
@@ -305,7 +258,6 @@ char buffer[128];
   HAL_Delay(300);
   config.encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, ENCODER_ELECTRICAL_OFFSET, ENCODER_INVERT_DIR);
   mt6835_init();
-
 
 
   // ------ <Calibrate ADC> ----- 
@@ -320,22 +272,22 @@ char buffer[128];
   
   
   // DEBUG: Read DRV8316 status registers
-  drv8316_status_t drv_status = {0};
-  if (drv8316_read_status(&drv_status) != HAL_OK) {
-        print("DRV status read failed\r\n");
-    } else {
-          sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
-            drv_status.ic_status,
-            drv_status.status1,
-            (uint8_t)(drv_status.status2 & 0x7F));
-          print(buffer);
-      }
-      if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
-      if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
-      if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
-      if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
-      if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
-      if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
+  // drv8316_status_t drv_status = {0};
+  // if (drv8316_read_status(&drv_status) != HAL_OK) {
+  //       print("DRV status read failed\r\n");
+  //   } else {
+  //         sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
+  //           drv_status.ic_status,
+  //           drv_status.status1,
+  //           (uint8_t)(drv_status.status2 & 0x7F));
+  //         print(buffer);
+  //     }
+  //     if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
+  //     if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
+  //     if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
+  //     if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
+  //     if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
+  //     if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
       
       
       
@@ -357,41 +309,25 @@ char buffer[128];
     1) != HAL_OK) {
       Error_Handler();
     }
-    // Debug print current offsets
-    // sprintf(buffer, "offs A=%u B=%u C=%u valid=%u\r\n",
-    //   g_current_offsets.a,
-    //   g_current_offsets.b,
-    //   g_current_offsets.c,
-    //   g_current_offsets.valid ? 1 : 0);
-    // print(buffer);
   // ----- </Calibrate current sensor offsets> -----
   
 
   mt6835_init();
-  // ----- <Calibrate electrical offset> ------
   calibrate_electrical_offset(&config.encoder);
-  sprintf(buffer, "offset=%lu elec_angle=%f\r\n",
-    (unsigned long)config.encoder.electrical_offset,
-    config.encoder.electrical_angle);
-    print(buffer);
-  // ----- </Calibrate electrical offset> ------
         
-
   if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
     Error_Handler();
   }
 
-  
   // mt6835_init();
-  config.position_target = -encoder_get_turns(&config.encoder);
+  HAL_Delay(20);
+  config.position_target = encoder_get_turns(&config.encoder);
   config.control_state = POSITION_CONTROL;
   HAL_Delay(500);
-  
   
   // ---- < Can communication > ----
   communication_init(&hcan);
   communication_start();
-  can_message_t msg;
   // ---- < /Can communication > ----
 
 
