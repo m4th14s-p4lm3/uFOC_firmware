@@ -25,22 +25,22 @@
 #define V_BUS_NOMINAL 11.5f // Power supply (V) / sqrt(3)
 
 // Current loop PI regulator values
-#define PI_CURRENT_KP 3.0f
-#define PI_CURRENT_KI 500.0f
-#define PI_CURRENT_HARD_LIMIT 1.0f // Ampers
+#define PI_CURRENT_KP 1.0f
+#define PI_CURRENT_KI 300.0f
+#define PI_CURRENT_HARD_LIMIT 1.0f // Ampers per phase
 #define PI_CURRENT_SOFT_LIMIT PI_CURRENT_HARD_LIMIT // Replace PI_CURRENT_HARD_LIMIT to set your own initial value
 
 
 // Velocity loop PI regulator values
-#define PI_VELOCITY_KP 0.00232f * 60.0f
-#define PI_VELOCITY_KI 0.28f * 60.0f
-#define PI_VELOCITY_HARD_LIMIT 1000.0f / 60.0f // THIS VALUE MUST BE IN ROTATIONS PER SECOND 
+#define PI_VELOCITY_KP 0.231f
+#define PI_VELOCITY_KI 60.8f
+#define PI_VELOCITY_HARD_LIMIT 16.0f // THIS VALUE MUST BE IN ROTATIONS PER SECOND 
 #define PI_VELOCITY_SOFT_LIMIT PI_VELOCITY_HARD_LIMIT // Replace PI_VELOCITY_HARD_LIMIT to set your own initial value
 
 
 // Position loop PID regulator
 #define PI_POSITION_KP 33.0f
-#define PI_POSITION_KI 0.0f * 60.0f
+#define PI_POSITION_KI 0.0f
 #define PI_POSITION_KD 0.12f
 
 

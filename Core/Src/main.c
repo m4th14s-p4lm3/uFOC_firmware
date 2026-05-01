@@ -126,26 +126,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // handle_communication(&config);
 
     // // adc_inj_cb_count++;
-    if (config.angular_velocity_target < -1000) return; // HACK - REMOVE LATER!
     if (config.control_state == NO_CONTROL) return;
     
     const float dt = 1.0f/1125.0f;
+
+    // ---- < Velocity PI control > ----
+    if (config.control_state >= VELOCITY_CONTROL){
+      float velocity_rpm = get_angular_velocity(&config.encoder);
+      float error_w = config.angular_velocity_target - velocity_rpm;
+      config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
+    }
 
     // ---- < Position PID control > -----
     if (config.control_state >= POSITION_CONTROL){
       float position = encoder_get_turns(&config.encoder);
       float error_pos = config.position_target - position;
       config.angular_velocity_target = pid_update(&config.regulators.pid_position, error_pos, dt);
-    }
-
-    // ---- < Velocity PI control > ----
-    if (config.control_state >= VELOCITY_CONTROL){
-      // float velocity_rpm = config.encoder.angular_velocity_ewma * 9.55741f;
-      // float velocity_rpm = get_angular_velocity(&config.encoder) * 9.55741f;
-      // float velocity_rpm = get_angular_velocity(&config.encoder) * 60;
-      float velocity_rpm = get_angular_velocity(&config.encoder);
-      float error_w = config.angular_velocity_target - velocity_rpm;
-      config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
     }
 }
 
@@ -203,7 +199,6 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc) {
   void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
       communication_rx_fifo0_pending_callback(hcan);
       handle_communication(&config);
-    
     }
   // ------- < / CAN COMUNICATION > ----------- 
 
@@ -252,14 +247,15 @@ char buffer[128];
   /* USER CODE BEGIN 2 */
 
   config = init_config();  // initialize config
-
+  
+  
   init_sin_table();
   drv8316_init(&g_drv_cfg);
   HAL_Delay(300);
   config.encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, ENCODER_ELECTRICAL_OFFSET, ENCODER_INVERT_DIR);
   mt6835_init();
-
-
+  
+  
   // ------ <Calibrate ADC> ----- 
   if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
     Error_Handler();
@@ -313,6 +309,7 @@ char buffer[128];
   
 
   mt6835_init();
+  HAL_Delay(20);
   calibrate_electrical_offset(&config.encoder);
         
   if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
@@ -321,8 +318,10 @@ char buffer[128];
 
   // mt6835_init();
   HAL_Delay(20);
-  config.position_target = encoder_get_turns(&config.encoder);
-  config.control_state = POSITION_CONTROL;
+  // config.position_target = encoder_get_turns(&config.encoder);
+  config.position_target = 0.0f;
+  // config.control_state = POSITION_CONTROL;
+  config.control_state = NO_CONTROL;
   HAL_Delay(500);
   
   // ---- < Can communication > ----
@@ -341,7 +340,7 @@ char buffer[128];
   static uint32_t last_ms = 0;
   static uint32_t last_count = 0;
   while (1){
-
+    // handle_communication(&config);
 
     // char buffer[128];
     // handle_communication();

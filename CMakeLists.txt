@@ -54,6 +54,7 @@ target_include_directories(encoder PUBLIC uFOC_lib/encoder/Inc)
 target_link_libraries(encoder PUBLIC stm32cubemx)
 target_link_libraries(encoder PUBLIC stm32cubemx foc)
 target_link_libraries(encoder PUBLIC stm32cubemx driver)
+target_link_libraries(encoder PUBLIC stm32cubemx config)
 
 
 # Driver

@@ -4,6 +4,7 @@
 #include <math.h>
 #include "foc.h"
 #include "driver.h"
+#include "config.h"
 
 /* DWT-based delay — funguje i uvnitř ISR, nepotřebuje SysTick */
 static void DWT_Delay_ms(uint32_t ms)
@@ -102,15 +103,6 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
     encoder.last_good_raw = new_raw_value;
     encoder.crc_error_count = 0u;
 
-    // /* Velocity moving-average buffer — default window = 8 samples */
-    // encoder.num_samples   = 8u;
-    // encoder.vel_buf_head  = 0u;
-    // encoder.vel_buf_count = 0u;
-    // for (uint8_t i = 0u; i < ENCODER_MAX_VEL_SAMPLES; i++) {
-    //     encoder.vel_buf[i] = 0.0f;
-    // }
-    // // spi3_configure_for_encoder();
-
     return encoder;
 }
 
@@ -124,8 +116,6 @@ void update_encoder(encoder_t* encoder){
 
     if (!crc_ok) {
         encoder->crc_error_count++;
-        /* Použij poslední dobrou hodnotu — motor pokračuje bez záškubu.
-         * delta = 0, takže velocity estimace "zamrzne" na jednu periodu. */
         new_raw_value = encoder->last_good_raw;
     } else {
         encoder->last_good_raw = new_raw_value;
@@ -145,16 +135,12 @@ void update_encoder(encoder_t* encoder){
     encoder->last_delta = delta;
     encoder->position_ticks += (int64_t)delta;
     
-
-
-    
-    
     
     encoder->ewma_value = encoder->ewma_alpha * encoder->position_ticks + (1.0f - encoder->ewma_alpha) * encoder->ewma_value;
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
-    encoder->angular_velocity = get_angular_velocity_raw(encoder, 0.0002f); // unit is RADIANS - NOTE: Add "dt" property to init!
+    encoder->angular_velocity = get_angular_velocity_raw(encoder, 0.0002f); // unit is ROTATIONS/SECOND - NOTE: Add "dt" property to init!
     encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
                                         (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     
@@ -165,8 +151,7 @@ void update_encoder(encoder_t* encoder){
         mech_raw_i += (int64_t)ENC_MODULO;
     }
 
-    /* mech_raw_i ∈ [0, 2^21-1], × pole_pairs (11) max = ~23M < INT32_MAX,
-     * ale int64 pro jistotu. */
+
     int64_t mech_elec_raw_i = (mech_raw_i * (int64_t)encoder->magnetic_pole_pairs)
                               % (int64_t)ENC_MODULO;
 
@@ -185,21 +170,9 @@ void update_encoder(encoder_t* encoder){
         encoder->electrical_angle = -(encoder->electrical_angle - 2 * M_PI);
     }
 
-    /* Push the latest angular_velocity into the circular buffer.
-     * Clamp num_samples to a valid range to guard against misconfiguration. */
-    uint8_t n = encoder->num_samples;
-    if (n == 0u) n = 1u;
-    if (n > ENCODER_MAX_VEL_SAMPLES) n = ENCODER_MAX_VEL_SAMPLES;
-
-    encoder->vel_buf[encoder->vel_buf_head] = encoder->angular_velocity;
-    encoder->vel_buf_head = (uint8_t)((encoder->vel_buf_head + 1u) % n);
-    if (encoder->vel_buf_count < n) {
-        encoder->vel_buf_count++;
-    }
 }
 
 void update_electrical_offset(encoder_t* encoder, uint32_t new_offset){
-    if (!encoder) return;
     encoder->electrical_offset = new_offset;
 }
 
@@ -225,12 +198,6 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
         *crc_ok = false;
     }
 
-    // if (spi3_configure_for_encoder() != HAL_OK) {
-    //     if (status_out) {
-    //         *status_out = 0xFF;
-    //     }
-    //     return 0u;
-    // }
 
     ENC_CS_GPIO_Port->BSRR = (uint32_t)ENC_CS_Pin << 16; // CS low
     HAL_SPI_TransmitReceive(&hspi3, tx, rx, sizeof(tx), 100);
@@ -257,30 +224,6 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
     return raw;
 }
 
-// /* Returns the moving average of the last num_samples angular-velocity readings.
-//  * The sign is flipped when invert_dir is set, consistent with the logical
-//  * motor direction convention used for electrical_angle. */
-// float get_velocity_moving_average(const encoder_t* encoder)
-// {
-//     if (!encoder) return 0.0f;
-
-//     uint8_t count = encoder->vel_buf_count;
-//     if (count == 0u) return 0.0f;
-
-//     float sum = 0.0f;
-//     for (uint8_t i = 0u; i < count; i++) {
-//         sum += encoder->vel_buf[i];
-//     }
-
-//     float avg = sum / (float)count;
-
-//     if (encoder->invert_dir) {
-//         avg = -avg;
-//     }
-
-//     return avg;
-// }
-
 // angular velocity in rotations per second
 float get_angular_velocity_raw(const encoder_t* encoder, float dt){
     if (!encoder || dt <= 0.0f) return 0.0f;
@@ -297,30 +240,44 @@ float get_angular_velocity(encoder_t* encoder){
     return encoder->angular_velocity_ewma;
 }
 
+extern ADC_HandleTypeDef hadc1;
 
-  void calibrate_electrical_offset(encoder_t* encoder){
+void calibrate_electrical_offset(encoder_t* encoder){
     // THIS IS A BLOCKING FUNCTION 
     // YOU SHOULD SET CONTROL STATE TO NO_CONTROL BEFORE CALLING THIS FUNCITON!
     if (!encoder) return;
-    DWT_Delay_ms(3);
+    __HAL_ADC_DISABLE_IT(&hadc1, ADC_IT_JEOS);   // pause ADC ISR
+
+    // DWT_Delay_ms(3);
+    HAL_Delay(3);
 
     float v_alpha, v_beta;
     float va, vb, vc;
 
-    inv_park_transform(0.4f, 0.0f, 0.0f, &v_alpha, &v_beta);
+    inv_park_transform(5.0f, 0.0f, 0.0f, &v_alpha, &v_beta);
     inv_clarke_transform(v_alpha, v_beta, &va, &vb, &vc);
 
-    float du = 0.5f + va;
-    float dv = 0.5f + vb;
-    float dw = 0.5f + vc;
+    float vmax = fmaxf(va, fmaxf(vb, vc));
+    float vmin = fminf(va, fminf(vb, vc));
+    float v0 = -0.5f * (vmax + vmin);
+    
+
+    float va_svpwm = va + v0;
+    float vb_svpwm = vb + v0;
+    float vc_svpwm = vc + v0;
+
+    float du = 0.5f + va_svpwm / V_BUS_NOMINAL; // NOTE: REPLACE WITH V_BUS_NOMINAL!!!
+    float dv = 0.5f + vb_svpwm / V_BUS_NOMINAL;
+    float dw = 0.5f + vc_svpwm / V_BUS_NOMINAL;
+
     pwm_set(du, dv, dw);
 
-    DWT_Delay_ms(3);
+    HAL_Delay(3);
 
     uint32_t first = 0;
     int32_t acc = 0;
     int32_t prev = 0;
-    uint16_t num_samples = 500;
+    uint16_t num_samples = 300;
     for (int i = 0; i < num_samples; i++) {
         update_encoder(encoder);
         int32_t x = (int32_t)encoder->current_raw_value;
@@ -337,7 +294,7 @@ float get_angular_velocity(encoder_t* encoder){
             prev = x;
         }
 
-        DWT_Delay_ms(2);
+        HAL_Delay(2);
     }
 
     int32_t avg = acc / num_samples;
@@ -351,4 +308,6 @@ float get_angular_velocity(encoder_t* encoder){
     update_electrical_offset(encoder, mech_elec_raw);
 
     pwm_set(0.5f, 0.5f, 0.5f);
+    __HAL_ADC_ENABLE_IT(&hadc1, ADC_IT_JEOS); // unpause ADC ISR
+
 }

@@ -521,11 +521,11 @@ HTML = """<!DOCTYPE html>
     <hr class="divider">
     <h3>PID — d + q osa</h3>
     <div class="row">
-      <div><label>Kp</label><input id="cc_kp" type="number" value="0" step="0.001"></div>
+      <div><label>Kp</label><input id="cc_kp" type="number" value="0" step="0.1"></div>
       <button onclick="post('/current/kp', {value: numVal('cc_kp')})">Set Kp</button>
     </div>
     <div class="row">
-      <div><label>Ki</label><input id="cc_ki" type="number" value="0" step="0.001"></div>
+      <div><label>Ki</label><input id="cc_ki" type="number" value="0" step="2"></div>
       <button onclick="post('/current/ki', {value: numVal('cc_ki')})">Set Ki</button>
     </div>
   </div>
@@ -582,7 +582,7 @@ HTML = """<!DOCTYPE html>
     <div class="row">
       <div>
         <label>Position target <span class="unit">rot</span></label>
-        <input id="pc_target" type="number" value="0" step="0.01">
+        <input id="pc_target" type="number" value="0" step="1">
       </div>
       <button onclick="post('/position/target', {value: numVal('pc_target')})">Set</button>
     </div>

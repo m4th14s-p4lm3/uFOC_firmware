@@ -4,7 +4,5 @@
 
 void print(const char *msg);
 
-void print_adc_input();
-
 
 #endif

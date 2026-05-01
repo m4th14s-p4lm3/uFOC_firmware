@@ -28,9 +28,7 @@ typedef struct {
     float ewma_value;
     float ewma_previous_value;
     float ewma_delta;
-
     float ewma_alpha;
-
 
     int64_t  position_ticks;
     int32_t  last_delta;
@@ -44,12 +42,6 @@ typedef struct {
     /* CRC diagnostika */
     uint32_t last_good_raw;
     uint32_t crc_error_count;
-
-    /* Velocity moving-average circular buffer */
-    uint8_t num_samples;                          // window size (1 – ENCODER_MAX_VEL_SAMPLES)
-    float   vel_buf[ENCODER_MAX_VEL_SAMPLES];     // ring buffer storage
-    uint8_t vel_buf_head;                         // next write index
-    uint8_t vel_buf_count;                        // how many valid samples are stored
 
 } encoder_t;
 

@@ -201,7 +201,7 @@ float convert_user_units_to_rotations(config_t* config, float value_to_convert){
 }
 
 float radians_to_rotations(float radian_value){
-    return radian_value / (2.0f * M_PI);
+    return radian_value / 2.0f * M_PI;
 }
 
 float degrees_to_rotations(float degrees_value){
