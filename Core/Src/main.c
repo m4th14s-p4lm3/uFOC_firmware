@@ -116,7 +116,7 @@ volatile float ia, ib, ic;                // Measured currents
 volatile float va, vb, vc;                // Output voltages before SVPWM
 
 volatile config_t config; // Global config
-
+uint32_t adc_inj_cb_count = 0;
   
 // volatile uint32_t adc_inj_cb_count = 0;
 
@@ -125,10 +125,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     if (htim->Instance != TIM6) return;
     // handle_communication(&config);
 
-    // // adc_inj_cb_count++;
+    adc_inj_cb_count++;
     if (config.control_state == NO_CONTROL) return;
     
-    const float dt = 1.0f/1125.0f;
+    const float dt = 1.0f/2000.0f;
 
     // ---- < Velocity PI control > ----
     if (config.control_state >= VELOCITY_CONTROL){
@@ -212,7 +212,7 @@ char buffer[128];
   * @brief  The application entry point.
   * @retval int
   */
-  int main(void)
+int main(void)
 {
 
   /* USER CODE BEGIN 1 */
@@ -359,17 +359,17 @@ char buffer[128];
     // HAL_Delay(10);
 
     // Timer frequency check
-    // uint32_t now = HAL_GetTick();
-    // if (now - last_ms >= 1000) {
-    //     uint32_t cnt = adc_inj_cb_count;
-    //     uint32_t diff = cnt - last_count;
+    uint32_t now = HAL_GetTick();
+    if (now - last_ms >= 1000) {
+        uint32_t cnt = adc_inj_cb_count;
+        uint32_t diff = cnt - last_count;
 
-    //     sprintf(buffer, "ADC inj cb freq: %lu Hz\r\n", (unsigned long)diff);
-    //     print(buffer);
+        sprintf(buffer, "ADC inj cb freq: %lu Hz\r\n", (unsigned long)diff);
+        print(buffer);
 
-    //     last_count = cnt;
-    //     last_ms = now;
-    // }
+        last_count = cnt;
+        last_ms = now;
+    }
 
   }
     
@@ -398,7 +398,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -410,10 +410,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -543,7 +543,7 @@ static void MX_CAN_Init(void)
   hcan.Init.Prescaler = 4;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_15TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
   hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
@@ -655,7 +655,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_CENTERALIGNED1;
-  htim1.Init.Period = 1800;
+  htim1.Init.Period = 3599;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -705,7 +705,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_ENABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 50;
+  sBreakDeadTimeConfig.DeadTime = 100;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.BreakFilter = 0;
@@ -742,7 +742,7 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 31; // 31
+  htim6.Init.Prescaler = 31;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim6.Init.Period = 999;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

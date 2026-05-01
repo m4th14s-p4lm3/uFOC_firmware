@@ -10,6 +10,9 @@
 #define SIN_MASK (SIN_TABLE_SIZE - 1)
 #define SIN_SCALE ((float)SIN_TABLE_SIZE / TWO_PI)
 
+#define FOC_LOOP_FREQUENCY 8888.0f
+
+
 static float sin_table[SIN_TABLE_SIZE];
 
 void init_sin_table(void)
@@ -94,8 +97,8 @@ void foc_compute_voltages(float id_ref, float iq_ref, float* theta_e,
   float err_d = id_ref - id;
   float err_q = iq_ref - iq;
   
-  float vd = pi_update(pi_d, err_d, 0.0002f);
-  float vq = pi_update(pi_q, err_q, 0.0002f); 
+  float vd = pi_update(pi_d, err_d, 1.0f/FOC_LOOP_FREQUENCY);
+  float vq = pi_update(pi_q, err_q, 1.0f/FOC_LOOP_FREQUENCY); 
   
   float v_alpha, v_beta;
   inv_park_transform(vd, vq, *theta_e, &v_alpha, &v_beta);

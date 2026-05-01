@@ -140,7 +140,7 @@ void update_encoder(encoder_t* encoder){
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
-    encoder->angular_velocity = get_angular_velocity_raw(encoder, 0.0002f); // unit is ROTATIONS/SECOND - NOTE: Add "dt" property to init!
+    encoder->angular_velocity = get_angular_velocity_raw(encoder, 1.0f/8888.0f); // unit is ROTATIONS/SECOND - NOTE: Add "dt" property to init!
     encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
                                         (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     

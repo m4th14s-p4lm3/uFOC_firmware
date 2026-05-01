@@ -9,10 +9,6 @@
 #define ENC_MODULO              (MAX_ENCODER_RAW_VALUE + 1u)   // 2097152
 #define ENC_HALF_MODULO         (ENC_MODULO / 2u)              // 1048576
 
-/* Maximum capacity of the velocity circular buffer.
- * num_samples must be <= this value. */
-#define ENCODER_MAX_VEL_SAMPLES 64u
-
 
 typedef struct {
     bool invert_dir;
