@@ -1,0 +1,13 @@
+# Don't track content of these folders
+doc_parts/*.log
+doc_parts/*.pdf
+figs/*.pdf
+
+*.aux
+*.log
+*.nlg
+*.nlo
+*.nls
+*.out
+*.synctex.gz
+*.toc

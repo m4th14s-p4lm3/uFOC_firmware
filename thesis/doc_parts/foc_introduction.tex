@@ -1,0 +1,121 @@
+\chapter{Introduction to FOC - work name}
+\section{FOC overview}
+Field Oriented Control is a closed loop control method for controlling torque of BLDC motors based on Clarke-Park Transformation.
+Standard BLDC motor is aquipped with three stator windings, which are supplied with three phase currents.
+To achive commutation and generate torque, propper voltage has to be provided to the stator windings by reading the phase currents ($i_a, i_b, i_c$).
+Three phase currents reference frames can be decomposed into two orthogonal torque and flux reference frames using Clarke transformation, 
+resulting in two currents ($i_\alpha$, $i_\beta$) in a stationary reference frame.
+
+Park transformation is then applied to transform the currents from a stationary reference frame to a rotating reference frame, resulting in two DC currents ($i_d$, $i_q$), 
+where $i_d$ is a flux current and $i_q$ is a torque current.
+
+To control $i_d$ and $i_q$ currents, two independent proportional-integral (PI) controllers are used to update applied voltage to the stator windings based on the error between the reference and the measured currents.
+In this implementation only the $i_q$ current reference is changed to control the torque, while the $i_d$ current reference is always set to zero to maximize the torque per ampere.
+
+After getting new voltage references from the PI controllers, they need to be transformed back to three phase voltages using inverse Park and inverse Clarke transformations,
+which can be then applied to the stator windings.
+
+However applying the voltages directly from the inverse Park-Clarke transformations will achieve only aproximatelly 84 of the maximum voltage difference between the stator windings,
+which is not optimal. To maximize the voltage difference between the stator windings, Space Vector Modulation (SVPWM) can be applied to the voltage references. 
+
+Now that we can control the torque of the motor by controlling the $i_q$ current reference, a velocity control loop can be implemented on top of the torque control by 
+using a PI controller to update the $i_q$ current reference based on the velocity error.
+
+Aditionally, a position control loop can be implemented on top of the velocity control loop by using a PID controller to update the velocity reference based on the position error.
+
+*add diagram of the control loops*
+
+\section{Clarke transformation}
+Clarke transformation is used to transform three phase currents ($i_a$, $i_b$, $i_c$) into two orthogonal currents ($i_\alpha$, $i_\beta$) in a stationary reference frame,
+where $i_\alpha$ is torque generating current and $i_\beta$ is flux producing current.
+
+Clarke transformation can be represented as a matrix multiplication of the three phase currents with the following transformation matrix:
+\begin{equation}
+\begin{bmatrix}
+i_\alpha \\
+i_\beta
+\end{bmatrix}
+=
+\frac{2}{3}
+\begin{bmatrix}
+1 & -\frac{1}{2} & -\frac{1}{2} \\
+0 & \frac{\sqrt{3}}{2} & -\frac{\sqrt{3}}{2}
+\end{bmatrix}
+\begin{bmatrix}
+i_a \\
+i_b \\
+i_c
+\end{bmatrix}
+\end{equation}
+
+The scaling factor $\frac{2}{3}$ ensures amplitude invariance between the three-phase and $i_\alpha$ $i_\beta$ representations.
+
+Inverse Clarke transformation in context of FOC is used to transform two orthogonal voltages ($v_\alpha$, $v_\beta$) in a stationary reference frame back
+to three phase voltages ($v_a$, $v_b$, $v_c$) that can be applied to the stator windings.
+\begin{equation}
+\begin{bmatrix}
+v_a \\
+v_b \\
+v_c
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & 0 \\
+-\frac{1}{2} & \frac{\sqrt{3}}{2} \\
+-\frac{1}{2} & -\frac{\sqrt{3}}{2}
+\end{bmatrix}
+\begin{bmatrix}
+v_\alpha \\
+v_\beta
+\end{bmatrix}
+\end{equation}
+
+
+\section{Park transformation}
+Park transformation is used to transform two orthogonal currents ($i_\alpha$, $i_\beta$) in a stationary reference frame from the stator point of view
+into two DC currents ($i_d$, $i_q$) in a rotating reference frame from a rotor point of view, where $i_d$ is a flux current and $i_q$ is a torque current.
+To perfrom Park transformation, the electrical angle $\theta_e$ must to be calculated based on the rotor position, which can be obtained from the encoder reading.
+
+Park transformation can be represented as a matrix multiplication of the two orthogonal currents ($i_\alpha$, $i_\beta$) with the following transformation matrix:
+
+\begin{equation}
+\begin{bmatrix}
+    i_d \\
+    i_q
+\end{bmatrix}
+=
+\begin{bmatrix}
+\cos(\theta_e) & \sin(\theta_e) \\
+\sin(-\theta_e) & \cos(\theta_e)
+\end{bmatrix}
+\begin{bmatrix}
+    i_\alpha \\
+    i_\beta
+\end{bmatrix}
+\end{equation}
+
+In context of FOC, inverse Park transformation is used to transform two orthogonal DC voltages ($v_d$, $v_q$), which are the outputs of the PI controllers, 
+from a rotating reference frame back to two orthogonal voltages ($v_\alpha$, $v_\beta$) in a stationary reference frame.
+
+Inverse park transformation can be represented as a matrix multiplication of the two orthogonal DC voltages ($v_d$, $v_q$) with the following transformation matrix:
+\begin{equation}
+\begin{bmatrix}
+v_\alpha \\
+v_\beta
+\end{bmatrix}
+=
+\begin{bmatrix}\cos(\theta_e) & -\sin(\theta_e) \\
+\sin(\theta_e) & \cos(\theta_e)
+\end{bmatrix}
+\begin{bmatrix}v_d \\
+v_q
+\end{bmatrix}
+\end{equation}
+
+\section{PI regulator}
+Anti-windup
+\section{Space vector modulation}
+Space vector modulation is used to maximize the voltage difference between the stator windings.
+
+\section{Velocity and position control loops}
+\section{Electrical angle calculation}

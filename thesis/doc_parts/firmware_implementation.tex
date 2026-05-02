@@ -1,0 +1,155 @@
+\chapter{Firmware implementation}
+\section{Used technologies and development tools}
+STM32CubeMX was used to simplify the initial project setup, while the HAL library was employed to facilitate peripheral configuration
+and management. The firmware was implemented in the C programming language. CAN communication testing was performed using a Makerbase CANable V2.0 
+USB interface together with a Python based client script built on the pycan library. * Also compilation should be mantioned *
+
+Arduino IDE was used as a serial monitor for debugging purposes.
+\section{Firmware topology}
+The firmware is structured into reusable modules located in the \texttt{uFOC\_lib} directory. 
+Peripheral initialization and high-level application logic are implemented in \texttt{src/main.c}.
+
+uFOC\_lib contains the following modules:
+\begin{itemize}
+    \item \texttt{driver} - handles DRV8316CRRGFR driver configuration and control, ADC current sensing and PWM generation.
+    \item \texttt{encoder} - handles MT6835GT encoder SPI configuration, positional data reading, angular velocity calculation and signal filtering.
+    \item \texttt{foc} - implements all necessary transformations, to perform FOC control as well as goniometric functions optimizations and SVPWM calculations.
+    \item \texttt{config} - is used to store and control global configuration parameters of the firmware. This module implements an abstraction layer to simplify the access to the configuration parameters and ensure that they are updated correctly.
+    \item \texttt{pi\_controller} - implements PI and PID controllers with anti-windup and output saturation.
+    \item \texttt{communication} - manages CAN communication, including message parsing and sending.
+\end{itemize}
+
+The current control loop, together with current sampling and encoder reading, is executed in the ADC injected conversion complete interrupt,
+which is triggered by the \texttt{TIM1\_CC4} event at a frequency of 5~kHz. This ensures precise alignment between current measurement and the PWM cycle.
+
+Higher-level control loops, namely velocity and position control, are executed in a separate timer interrupt (\texttt{TIM6}) at a lower frequency of 1125~Hz, 
+reflecting the cascaded structure of the control system.
+
+This separation of control loops follows common practice in motor control systems, 
+where fast inner loops regulate currents and slower outer loops regulate mechanical quantities.
+
+\section{MCU configuration}
+
+The uFOC driver uses an STM32F3xx microcontroller as the main processing unit. 
+The MCU is responsible for real-time motor control, peripheral coordination, 
+and communication with external devices. The configuration of the microcontroller is designed to 
+meet the deterministic timing and low latency requirements of FOC.
+
+\subsection{System clock}
+
+The system clock is derived from the internal high-speed oscillator (HSI) operating at 8~MHz. 
+This signal is multiplied using a phase-locked loop (PLL) with a multiplication factor of 16, resulting in a system clock frequency of 64~MHz.
+
+The AHB bus runs at the full system clock frequency (64~MHz), while the APB1 bus is prescaled by a factor of 2 to 32~MHz, and the APB2 bus operates at 64~MHz. This configuration satisfies the peripheral frequency constraints while maintaining maximum performance for time-critical components.
+
+Particular attention is given to peripherals involved in motor control. The advanced timer TIM1 and the ADC are both clocked at 64~MHz, ensuring high timing resolution for PWM generation and precise synchronization of current sampling.
+
+This clock distribution enables deterministic timing of control loops and supports the strict real-time requirements of the control algorithm.
+
+TIM6 is clocked from the APB1 timer clock. Although the APB1 peripheral clock is prescaled to 32~MHz, the timer clock is doubled to 64~MHz due to the APB1 prescaler being different from one. TIM6 is configured with a prescaler of 31 and an auto-reload value of 999, resulting in an update interrupt frequency of 2~kHz.
+
+
+
+\subsection{Timer configuration}
+The advanced timer TIM1 is used for PWM generation. It is configured in center aligned mode, 
+which reduces switching harmonics and is commonly used in motor control applications. 
+The timer operates at a PWM frequency of 8888~Hz. 
+
+TIM1 also generates a compare event (\texttt{CC4}) that is used to trigger ADC injected conversions. 
+This ensures that current sampling is synchronized with the PWM cycle and occurs at a well-defined point in time.
+
+A separate basic timer, TIM6, is used to periodically execute higher-level control loops. 
+TIM6 operates at a frequency of 2~kHz and triggers an interrupt used for velocity and position control. 
+This lower update rate reflects the cascaded structure of the control system, 
+where slower outer loops are executed less frequently than the inner current control loop.
+
+\subsection{ADC configuration}
+The ADC is configured to perform injected conversions of three phase currents.
+The conversions are triggered by a TIM1 compare event, ensuring that current sampling occurs 
+at a well-defined point within the PWM cycle. This synchronization minimizes measurement noise and improves control accuracy.
+
+The ADC conversion complete interrupt is used to process the measured currents and execute the current control loop.
+
+\subsection{PWM-ADC synchronization}
+Precise synchronization between PWM generation and current measurement is achieved by using a timer-generated trigger for ADC conversions.
+The TIM1 compare event (\texttt{CC4}) initiates the ADC injected sequence, and the corresponding interrupt is used to execute the control algorithm.
+
+The trigger signal is generated by a dedicated compare channel that is not used for PWM output, 
+allowing independent adjustment of the sampling point within the PWM cycle.
+
+This approach ensures deterministic timing and minimizes control latency.
+
+\subsection{Communication interfaces}
+The MCU communicates with external systems primarily via the CAN interface, which is used for command exchange and system control. 
+The CAN peripheral is configured in normal mode with automatic retransmission enabled.
+
+The CAN peripheral is clocked from the APB1 bus operating at 32~MHz. 
+The bit timing parameters are configured to achieve a communication speed of 500~kbit/s. 
+This interface is used for command exchange and system control and operates independently of the real-time control loops.
+
+A UART interface is also available and is used only for debugging and diagnostic output during development.
+
+\subsection{SPI interfaces}
+
+SPI communication is used to interface with external peripherals, namely the magnetic encoder and the gate driver. 
+Both devices share a single SPI peripheral, with separate chip-select signals used to access each device.
+
+The SPI operates in master mode, and its configuration (clock polarity and phase) is adjusted as required by the connected peripherals.
+
+The magnetic encoder is accessed within the real-time control loop to obtain rotor position information. 
+The encoder update is performed inside the ADC interrupt service routine, 
+ensuring that position data is synchronized with current measurements and control execution. 
+As the SPI communication is performed in a blocking manner, its latency directly affects the execution time of the control loop.
+
+In contrast, communication with the gate driver is primarily used for configuration and status monitoring. 
+These operations are not time-critical and are performed outside the real-time control loop only during firmware initialization.
+
+The SPI peripheral operates at a clock frequency of approximately 32~MHz, 
+configured using a prescaler of 2. This high communication speed minimizes the duration of blocking SPI transactions, 
+which is particularly important as encoder data acquisition is performed within the interrupt service routine.
+
+At this speed, a the encoder read transaction takes only a few microseconds, 
+ensuring that the communication overhead remains negligible compared to the control loop period.
+
+\section{Driver}
+\subsection{Current sensing offset calibration}
+
+\section{Encoder}
+\subsection{Data reading}
+\subsection{Direction inversion}
+
+\subsection{CRC control}
+\subsection{Velocity calculation}
+\subsection{Signal filtering}
+\subsection{Electrical offset calibration}
+
+
+\subsection{Implemented functionality}
+\subsection{Electrical offset calibration}
+
+\section{FOC implementation}
+\subsection{Current control loop}
+\subsection{Velocity and position control loops}
+
+\section{Configuration abstraction layer}
+
+% \section{CAN communication}
+% \section{CAN client example}
+
+
+% \chapter{Testing and results}
+% \chapter{Future improvements}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

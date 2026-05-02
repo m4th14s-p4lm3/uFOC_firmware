@@ -1,0 +1,14 @@
+\chapter{uFOC driver hardware overview}
+The provided uFOC driver contains every component needed for successful implementation of FOC on a very compact area of a signle PCB.
+The driver is based on STM32F302K8U microcontroller, which is a 32-bit ARM Cortex-M4 microcontroller with FPU, running at up to 72 MHz.
+
+Current control via three PWM outpus from MCU is managed by 3-phase motor driver DRV8316CRRGFR with integrated current sensing connected to three ADCs on the STM32.
+
+Furthermore, the driver is equipped with MT8635 magnetic encoder with 21 bit accuracy which is used in addition with 
+diametricly oriented magnet on motor shaft to measure absolute position of the rotor. 
+Accurate position reading is crucial input to calculate electrical angle for the FOC control algorithm and instantaneous speed estimation.
+
+TCAN332 CAN transceiver IC is used to provide communication via CAN bus. Driver is equipped with two CAN connectors, which allows daisy chaining of multiple drivers on a single CAN bus line.
+
+Additionally, the uFOC driver is equipped with ICM-42670 IMU, however IMU reading is not implemented, as it is not crucial for the FOC control algorithm.
+

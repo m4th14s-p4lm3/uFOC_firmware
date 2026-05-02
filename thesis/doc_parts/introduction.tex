@@ -1,0 +1,196 @@
+\chapter{Introduction}
+BLDC motors are increasingly more popular in varous applications, such as robotics, drones, electric vehicles and many more, due to their high efficiency, 
+ability to produce large torque at low speeds and high position accuracy. Unlike brushed DC motors, BLDC motors need specialized driver and control to achieve commutation.
+
+While commercial BLDC drivers are available on todays market, such as ODrive Micro, moteus-c1 (add reference), they are often expensive in range of 70-90 USD per driver.
+Therefore, the Department of Control Engineering at the Czech Technical University in Prague has developed an 
+integrated three-phase motor driver called uFOC (micro FOC) with an STM-32 type microcontroller, which is a low-cost alternative to commercial drivers at BOM price of approximately 20 USD.
+
+To achive an efficient commutation and generate torque control, the driver needs to implement a closed loop control. 
+The most common control method for BLDC motors is Field Oriented Control (FOC), 
+which allows for precise control of the motor's torque and speed by controlling the current in the stator windings.
+
+Goal of this thesis is to develop embedded firmware that implements FOC current control, speed and position control loops and communication via CAN bus for the uFOC driver. 
+Additionally a Python client side example for CAN communication with the driver is provided.
+
+% \part{Let's do it!}
+
+% \chapter{uFOC driver hardware overview}
+% The provided uFOC driver contains every component needed for successful implementation of FOC on a very compact area of a signle PCB.
+% The driver is based on STM32F302K8U microcontroller, which is a 32-bit ARM Cortex-M4 microcontroller with FPU, running at up to 72 MHz.
+
+% Current control via three PWM outpus from MCU is managed by 3-phase motor driver DRV8316CRRGFR with integrated current sensing connected to three ADCs on the STM32.
+
+% Furthermore, the driver is equipped with MT8635 magnetic encoder with 21 bit accuracy which is used in addition with 
+% diametricly oriented magnet on motor shaft to measure absolute position of the rotor. 
+% Accurate position reading is crucial input to calculate electrical angle for the FOC control algorithm and instantaneous speed estimation.
+
+% TCAN332 CAN transceiver IC is used to provide communication via CAN bus. Driver is equipped with two CAN connectors, which allows daisy chaining of multiple drivers on a single CAN bus line.
+
+% Additionally, the uFOC driver is equipped with ICM-42670 IMU, however IMU reading is not implemented, as it is not crucial for the FOC control algorithm.
+
+
+
+
+
+
+
+% \chapter{Just examples beyond this point}
+
+% \section{Table example}
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+
+% % Tables 
+% \begin{table}[!t]
+% \centering
+% \begin{tabular}{lllll}
+% \toprule
+%  	 & Total number			 	  & Caused by          & Caused by                 & Collision        \\
+% Year & of collisions              & a driver of a tram & a driver of other vehicle & with pedestrians \\
+% \midrule
+% 2008 & 1441                       & 219                & 1055                      & 76               \\
+% 2009 & 1421                       & 225                & 1021                      & 91               \\
+% 2010 & 1432                       & 242                & 1040                      & 76               \\
+% 2011 & 1279                       & 177                & 959                       & 69               \\
+% 2012 & 1282                       & 204                & 943                       & 62               \\
+% 2013 & 1302                       & 204                & 938                       & 82               \\
+% 2014 & 1394                       & 226                & 999                       & 90               \\
+% 2015 & 1359                       & 194                & 984                       & 99               \\
+% 2016 & 1353                       & 183                & 1026                      & 75               \\
+% 2017 & 1572                       & 231                & 1164                      & 111              \\
+% \bottomrule
+% \end{tabular}
+% \caption{Statistics of tram collisions in Prague between years 2008 and 2017.\\ Source: novinky.cz}
+% \label{tab:I:statistics_collision}
+% \end{table}
+
+% % Another table
+% \begin{table}[!t]
+% \centering
+% \begin{tabular}{lllll}
+% \toprule
+%     &                            & $e_\mathrm{RMSE}(s)$   & $e_\mathrm{RMSE}(\dot{s})$  & $e_\mathrm{RMSE}(\ddot{s})$ \\
+% 	\midrule	
+%     & Without outages            & 1.9763 & 0.1864 & 0.0638 \\
+% LKF & With outages, without bias & 2.0339 & 0.1906 & 0.0641 \\
+%     & With outages, with bias    & 2.3498 & 0.4591 & 0.1979 \\
+%     \midrule	
+%     & Without outages            & 2.0949 & 0.1813 & 0.0648 \\
+% UKF & With outages, without bias & 2.1753 & 0.1842 & 0.0652 \\
+%     & With outages, with bias    & 2.3672 & 0.4432 & 0.1973 \\
+% \bottomrule
+% \end{tabular}
+% \caption{Evaluation of estimation algorithms on different datasets.}
+% \label{tab:E:rmse_sum}
+% \end{table}
+
+% \section{Figures}
+
+% % One wide figure
+% \begin{figure}[tb!]
+%     \centering
+%     \includegraphics[width=\textwidth]{figs/clearance_2.eps}
+%     \caption{Terms defined by ISO 15623, namely Subject vehicle~(SV), Target vehicle~(TV) and clearance $x_{c,k}$.}\label{fig:clearance_2}
+% \end{figure}
+	
+% % ----------- Some text to fill the gaps -----------
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+% % --------------------------------------------------	
+	
+% %% Two figures
+% \begin{figure*}[b!]
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/rails_center_line.eps}
+%         \caption{}\label{fig:M:rails_center_line}
+%     \end{subfigure}
+%     ~	
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/angles_rigid_body.eps}
+%         \caption{}\label{fig:M:angles_rigid_body}
+%     \end{subfigure}%
+%     \caption{
+%     	\textbf{(a)}~Railroad track (two black parallel lines) represented by a center curve (red). Distance and thus a position on the track of a tram is given by a parameter $s$.
+%    		\textbf{(b)}~Orientation of a rigid body represented using Tait-Bryan angles with NED frame orientation convention. Angles heading, slope and bank are respectively denoted as $\psi$, $\theta$ and $\phi$.}
+% \end{figure*}
+
+% % ----------- Some text to fill the gaps -----------
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+% % --------------------------------------------------
+
+% %% Or you wanted more??
+% \begin{figure*}[tb!]
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/comparison_acc_mobile_ad_acc_x.eps}
+%         \caption{Acceleration $a_x$}\label{fig:M:comparison_acc_mobile_ad_acc_x}
+%     \end{subfigure}
+%     ~	
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/comparison_acc_mobile_ad_acc_y.eps}
+%         \caption{Acceleration $a_y$}\label{fig:M:comparison_acc_mobile_ad_acc_y}
+%     \end{subfigure}%
+    
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/comparison_acc_mobile_ad_omega_x.eps}
+%         \caption{Angular rate $\omega_z$}\label{fig:M:comparison_acc_mobile_ad_omega_x}
+%     \end{subfigure}
+%     ~	
+%     \begin{subfigure}[t]{0.5\textwidth}
+%         \centering
+%         \includegraphics[width=\textwidth]{figs/comparison_acc_mobile_ad_omega_z.eps}
+%         \caption{Angular rate $\omega_x$}\label{fig:M:comparison_acc_mobile_ad_omega_z}
+%     \end{subfigure}%
+%     \caption{
+%        	Comparison of measurements from Precise and Low-cost IMUs.
+%        	}
+% \end{figure*}
+
+
+% % ----------- Some text to fill the gaps -----------
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+
+% Donec vitae arcu. Vivamus luctus egestas leo. Aliquam erat volutpat. Mauris dictum facilisis augue. Integer vulputate sem a nibh rutrum consequat. Proin mattis lacinia justo. Aliquam id dolor. In enim a arcu imperdiet malesuada. Duis sapien nunc, commodo et, interdum suscipit, sollicitudin et, dolor. Nunc dapibus tortor vel mi dapibus sollicitudin. Duis pulvinar. Praesent vitae arcu tempor neque lacinia pretium. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Nulla quis diam.
+% % --------------------------------------------------
+
+% \section{Math}
+% Any math you want:
+% \begin{equation}\label{eq:M:acc_measure}
+% \begin{bmatrix}
+% a_x	\\
+% a_y	\\
+% a_z
+% \end{bmatrix}
+% =
+% \begin{bmatrix}
+% \ddot{s} -g\sin\theta\\
+% g\sin\phi\cos\theta	+ c_h\dot{s}^2\cos\phi -c_v\dot{s}^2\sin \phi	\\
+% g\cos\phi\cos\theta	+ c_h\dot{s}^2\sin\phi -c_v\dot{s}^2\cos \phi	
+% \end{bmatrix}
+% \;.
+% \end{equation}
+
+% And more..:
+% \begin{equation}
+% \begin{split}
+% \hat{y}_k^{(i)} &= h\left( \hat{x}_{k|k-1}^{(i)}, t_k \right)	\;, \\
+% \hat{y}_k &= 	\sum_{i=0}^{2n} W_i \hat{y}_k^{(i)}	\;, \\
+% P_y &=  		\sum_{i=0}^{2n} W_i \left( \hat{y}_k^{(i)} - \hat{y}_k \right)\left( \hat{y}_k^{(i)} - \hat{y}_k \right)^\intercal + R_k \;, \\
+% P_{xy} &=  		\sum_{i=0}^{2n} W_i \left( \hat{x}_{k|k-1}^{(i)} - \hat{x}_{k|k-1} \right)\left( \hat{y}_k^{(i)} - \hat{y}_k \right)^\intercal \;. \\
+% \end{split}
+% \end{equation}
+% Thanks to package '\textbf{mathtools}', you can use command '\textbf{coloneqq}':	
+% \begin{equation}
+% A \coloneqq 5;
+% \end{equation}
+
+
+
+

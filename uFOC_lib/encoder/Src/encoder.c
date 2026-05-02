@@ -6,6 +6,10 @@
 #include "driver.h"
 #include "config.h"
 
+
+
+#define ANGULAR_VELOCITY_EWMA_ALPHA 0.8
+
 /* DWT-based delay — funguje i uvnitř ISR, nepotřebuje SysTick */
 static void DWT_Delay_ms(uint32_t ms)
 {

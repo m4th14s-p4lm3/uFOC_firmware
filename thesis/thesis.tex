@@ -1,0 +1,66 @@
+\documentclass{SPhdThesis}
+
+% PDF and title properties.
+\SgSetTitle{FOC Firmware for Integrated BLDC Driver}
+\SgSetAuthor{Mathias Palme}
+\SgSetYear{2026}
+\SgSetSupervisor{Ing. Krištof Pučejdl}
+\SgSetDegree{Bachelor's thesis}
+\SgSetUniversity{Czech Technical University in Prague}
+\SgSetFaculty{Faculty of Electrical Engineering}
+\SgSetDepartment{Department of Control Engineering}	
+\SgSetDeclarationDate{May 2026}
+
+% Make the nomenclature
+\usepackage{nomencl}
+\makenomenclature
+
+% Command for TODO things
+\newcommand\todo[1]{\textcolor{red}{#1}}
+
+
+\makenomenclature
+\setlength{\nomlabelwidth}{3cm}
+\setlength{\nomitemsep}{-\parsep}
+
+% The document.
+\begin{document}
+	\begin{frontmatter}
+		% Cover is not done yet
+		%\coverimage{}
+		%\makecover
+		\SgAddTitle{ctu_logo/cvut_symbol.pdf}%
+		\ctuAddAssignment{pdf_input_files/assignment.pdf}%
+		\SgAddDeclaration%
+		\input{doc_parts/acknowledgments}%
+		\input{doc_parts/abstract}%
+		
+		\SgAddToc%  Table of contents.
+		% ---------------		
+		% In my opinion, LoF, LoT or LoA are useless in the thesis.
+		% ---------------
+		%\SgAddLof%  List of figures.
+		%\SgAddLot%  List of tables.
+		%\SgAddLoa%  List of algorithms.
+		\input{doc_parts/nomenclature}	
+		\printnomenclature
+	\end{frontmatter}
+	
+	% Divide document into several parts
+	\input{doc_parts/introduction}
+	\input{doc_parts/foc_introduction.tex}
+	\input{doc_parts/firmware_implementation}
+	\input{doc_parts/conclusion}
+	
+	% Appedices
+	\begin{appendices}
+		\input{doc_parts/appendixes}
+	\end{appendices}
+	
+	% Simple biblio:
+	%\doloiSimpleBib{doc_parts/biblio}
+	
+	% Automatic biblio from .bib file
+	\doloiAutoBib{biblio_files/biblio_basic, biblio_files/railway_collision_avoidance}
+	
+\end{document}
