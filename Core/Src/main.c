@@ -23,7 +23,6 @@
 /* USER CODE BEGIN Includes */
 #include "stm32f3xx_hal.h"
 #include "string.h"
-#include <stdbool.h>
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -45,17 +44,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-static drv8316_config_t g_drv_cfg = {
-    .pwm_mode = DRV8316_PWM_MODE_6X,
-    .slew = DRV8316_SLEW_50V_PER_US,
-    .csa_gain = DRV8316_CSA_GAIN_0V60_PER_A,
-    .sdo_push_pull = true,
-    .enable_asr = false,
-    .enable_aar = false,
-    .clear_faults_on_init = true,
-    .lock_registers_after_init = false,
-    .verify_after_write = true,
-};
+static const drv8316_csa_gain_t g_drv_gain = DRV8316_CSA_GAIN_0V60_PER_A;
 
 static driver_current_offsets_t g_current_offsets = {0};
 static driver_phase_currents_t g_phase_currents = {0};
@@ -159,7 +148,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc) {
         ib_raw,
         ic_raw,
         &g_current_offsets,
-        g_drv_cfg.csa_gain);
+        g_drv_gain);
         
         ia = g_phase_currents.a;
         ib = g_phase_currents.b;
@@ -250,7 +239,7 @@ int main(void)
   
   
   init_sin_table();
-  drv8316_init(&g_drv_cfg);
+  drv8316_init(g_drv_gain);
   HAL_Delay(300);
   config.encoder = init_encoder(MOTOR_MAGNETIC_PAIRS, ENCODER_ELECTRICAL_OFFSET, ENCODER_INVERT_DIR);
   mt6835_init();
@@ -266,27 +255,7 @@ int main(void)
   pwm_init();
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
   
-  
-  // DEBUG: Read DRV8316 status registers
-  // drv8316_status_t drv_status = {0};
-  // if (drv8316_read_status(&drv_status) != HAL_OK) {
-  //       print("DRV status read failed\r\n");
-  //   } else {
-  //         sprintf(buffer, "DRV ic=0x%02X st1=0x%02X st2=0x%02X\r\n",
-  //           drv_status.ic_status,
-  //           drv_status.status1,
-  //           (uint8_t)(drv_status.status2 & 0x7F));
-  //         print(buffer);
-  //     }
-  //     if (drv_status.ic_status & 0x01) print("DRV FAULT bit set\r\n");
-  //     if (drv_status.ic_status & 0x02) print("DRV OT bit set\r\n");
-  //     if (drv_status.ic_status & 0x04) print("DRV OVP bit set\r\n");
-  //     if (drv_status.ic_status & 0x10) print("DRV OCP bit set\r\n");
-  //     if (drv_status.ic_status & 0x20) print("DRV SPI fault bit set\r\n");
-  //     if (drv_status.ic_status & 0x40) print("DRV buck fault bit set\r\n");
-      
-      
-      
+
   // TIM1
   __HAL_TIM_MOE_ENABLE(&htim1);
   if (HAL_ADCEx_InjectedStart_IT(&hadc1) != HAL_OK) {

@@ -6,25 +6,10 @@
 #include "driver.h"
 #include "config.h"
 
+#define ANGULAR_VELOCITY_EWMA_ALPHA 0.5f
+#define ANGLE_VALUE_EWMA_ALPHA  0.8f
+#define SAMPLE_DT 1.0f/8888.0f
 
-
-#define ANGULAR_VELOCITY_EWMA_ALPHA 0.8
-
-/* DWT-based delay — funguje i uvnitř ISR, nepotřebuje SysTick */
-static void DWT_Delay_ms(uint32_t ms)
-{
-    /* Povolení DWT čítače pokud ještě není */
-    if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
-        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-        DWT->CYCCNT = 0;
-    }
-    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
-        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    }
-    uint32_t start = DWT->CYCCNT;
-    uint32_t ticks = ms * (SystemCoreClock / 1000U);
-    while ((DWT->CYCCNT - start) < ticks);
-}
 
 #define ENC_CS_GPIO_Port GPIOA
 #define ENC_CS_Pin       GPIO_PIN_5
@@ -72,7 +57,9 @@ static HAL_StatusTypeDef spi3_configure_for_encoder(void)
 }
 
 
-encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, bool invert_dir){
+encoder_t init_encoder(uint8_t magnetic_pole_pairs, 
+                        uint32_t electrical_offset, 
+                        bool invert_dir){
     encoder_t encoder;
     uint8_t status_out;
     bool crc_ok = false;
@@ -86,13 +73,12 @@ encoder_t init_encoder(uint8_t magnetic_pole_pairs, uint32_t electrical_offset, 
 
     encoder.angular_velocity = 0.0f;
     encoder.angular_velocity_ewma = 0.0f;
-    encoder.angular_velocity_ewma_alpha = 0.5f;
-
+    encoder.angular_velocity_ewma_alpha = ANGULAR_VELOCITY_EWMA_ALPHA;
 
 
     encoder.ewma_previous_value = (float)new_raw_value;
     encoder.ewma_value = (float)new_raw_value;
-    encoder.ewma_alpha = 0.8f;
+    encoder.ewma_alpha = ANGLE_VALUE_EWMA_ALPHA;
     encoder.ewma_delta = 0.0f;
     
     encoder.position_ticks = new_raw_value;
@@ -144,7 +130,7 @@ void update_encoder(encoder_t* encoder){
     encoder->ewma_delta = encoder->ewma_value - encoder->ewma_previous_value;
     encoder->ewma_previous_value = encoder->ewma_value;
     
-    encoder->angular_velocity = get_angular_velocity_raw(encoder, 1.0f/8888.0f); // unit is ROTATIONS/SECOND - NOTE: Add "dt" property to init!
+    encoder->angular_velocity = get_angular_velocity_raw(encoder, SAMPLE_DT); // unit is ROTATIONS/SECOND - NOTE: Add "dt" property to init!
     encoder->angular_velocity_ewma = encoder->angular_velocity_ewma_alpha * encoder->angular_velocity + 
                                         (1 - encoder->angular_velocity_ewma_alpha) * encoder->angular_velocity_ewma;
     
@@ -176,7 +162,8 @@ void update_encoder(encoder_t* encoder){
 
 }
 
-void update_electrical_offset(encoder_t* encoder, uint32_t new_offset){
+void update_electrical_offset(encoder_t* encoder, 
+                                uint32_t new_offset){
     encoder->electrical_offset = new_offset;
 }
 
@@ -191,12 +178,14 @@ float encoder_get_turns(const encoder_t* encoder) {
 void mt6835_init(){
     spi3_configure_for_encoder();
 }
+
+
+uint8_t tx[6] = { (uint8_t)(0xA << 4), 0x03, 0x00, 0x00, 0x00, 0x00 };
+uint8_t rx[6] = {0};
 uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
 {
     // Burst command (0xA) + start address 0x003
     // Frame: [cmd|addr][dummy x4] → rx: [don't care x2][ANGLE[20:13]][ANGLE[12:5]][ANGLE[4:0]+STATUS][CRC]
-    uint8_t tx[6] = { (uint8_t)(0xA << 4), 0x03, 0x00, 0x00, 0x00, 0x00 };
-    uint8_t rx[6] = {0};
 
     if (crc_ok) {
         *crc_ok = false;
@@ -229,7 +218,8 @@ uint32_t mt6835_read_raw21(uint8_t *status_out, bool *crc_ok)
 }
 
 // angular velocity in rotations per second
-float get_angular_velocity_raw(const encoder_t* encoder, float dt){
+float get_angular_velocity_raw(const encoder_t* encoder, 
+                                float dt){
     if (!encoder || dt <= 0.0f) return 0.0f;
     float sign = 1;
     if (encoder->invert_dir) sign = -1;
@@ -242,6 +232,21 @@ float get_angular_velocity_raw(const encoder_t* encoder, float dt){
 
 float get_angular_velocity(encoder_t* encoder){
     return encoder->angular_velocity_ewma;
+}
+
+
+static void DWT_Delay_ms(uint32_t ms)
+{
+    if (!(CoreDebug->DEMCR & CoreDebug_DEMCR_TRCENA_Msk)) {
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+        DWT->CYCCNT = 0;
+    }
+    if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    }
+    uint32_t start = DWT->CYCCNT;
+    uint32_t ticks = ms * (SystemCoreClock / 1000U);
+    while ((DWT->CYCCNT - start) < ticks);
 }
 
 extern ADC_HandleTypeDef hadc1;

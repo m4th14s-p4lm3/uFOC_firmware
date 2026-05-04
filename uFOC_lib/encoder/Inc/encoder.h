@@ -13,8 +13,8 @@
 typedef struct {
     bool invert_dir;
 
-    uint32_t prevous_raw_value;
     uint32_t current_raw_value;
+    uint32_t prevous_raw_value;
 
 
     float angular_velocity;

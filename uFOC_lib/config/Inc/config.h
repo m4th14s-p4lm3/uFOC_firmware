@@ -32,8 +32,8 @@
 
 
 // Velocity loop PI regulator values
-#define PI_VELOCITY_KP 0.231f
-#define PI_VELOCITY_KI 60.8f
+#define PI_VELOCITY_KP 0.331f
+#define PI_VELOCITY_KI 40.8f
 #define PI_VELOCITY_HARD_LIMIT 16.0f // THIS VALUE MUST BE IN ROTATIONS PER SECOND 
 #define PI_VELOCITY_SOFT_LIMIT PI_VELOCITY_HARD_LIMIT // Replace PI_VELOCITY_HARD_LIMIT to set your own initial value
 

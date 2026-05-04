@@ -70,7 +70,7 @@ at a well-defined point within the PWM cycle. This synchronization minimizes mea
 
 The ADC conversion complete interrupt is used to process the measured currents and execute the current control loop.
 
-\subsection{PWM-ADC synchronization}
+\subsection{PWM ADC synchronization}
 Precise synchronization between PWM generation and current measurement is achieved by using a timer-generated trigger for ADC conversions.
 The TIM1 compare event (\texttt{CC4}) initiates the ADC injected sequence, and the corresponding interrupt is used to execute the control algorithm.
 
@@ -108,30 +108,183 @@ The SPI peripheral operates at a clock frequency of approximately 32~MHz,
 configured using a prescaler of 2. This high communication speed minimizes the duration of blocking SPI transactions, 
 which is particularly important as encoder data acquisition is performed within the interrupt service routine.
 
-At this speed, a the encoder read transaction takes only a few microseconds, 
-ensuring that the communication overhead remains negligible compared to the control loop period.
+At this speed, the encoder read transaction takes only a few microseconds.
 
-\section{Driver}
-\subsection{Current sensing offset calibration}
 
 \section{Encoder}
-\subsection{Data reading}
-\subsection{Direction inversion}
+The rotor position is measured using an MT6835 magnetic encoder with a 21-bit absolute resolution and SPI communication interface.
+The encoder interface is implemented as a reusable module located in \texttt{uFOC\_lib/encoder}. This module provides encoder initialization, 
+raw position acquisition, CRC verification, position unwrapping, velocity estimation, signal filtering and electrical offset calibration.
 
-\subsection{CRC control}
-\subsection{Velocity calculation}
-\subsection{Signal filtering}
+The encoder is accessed through the SPI3 peripheral. Since the SPI bus is shared with the gate driver, 
+the encoder module explicitly configures the SPI peripheral before encoder communication. The encoder uses a dedicated chip-select signal, 
+while the SPI transfer itself is performed in blocking mode. 
+This is acceptable because the encoder read operation is executed inside the real-time control loop and must therefore be deterministic and short.
+
+\subsection{Encoder data structure}
+
+The encoder state is stored in the \texttt{encoder\_t} structure. It contains the most recent raw encoder value, the previous raw value, an unwrapped absolute position counter, velocity estimates, filtering parameters, electrical angle information and diagnostic variables related to CRC checking.
+
+The raw encoder position is stored as a 21-bit value in the range from $0$ to $2^{21}-1$. To handle continuous rotation across the encoder overflow boundary, the module computes the difference between consecutive samples and corrects it when the difference exceeds half of the encoder range. The corrected difference is accumulated into \texttt{position\_ticks}, which represents the continuous mechanical position.
+
+The structure also contains the \texttt{invert\_dir} flag. This flag allows the logical direction of rotation to be inverted without modifying the raw encoder data. It affects the sign of the computed mechanical position, angular velocity and electrical angle.
+
+Namely \texttt{encoder\_t} contains:
+\begin{itemize}
+\item \verb|bool invert_dir| -- logical inversion of rotation direction which affects the sign of computed 
+                                angle and velocity without modifying raw encoder data
+
+\item \verb|uint32_t current_raw_value| -- latest 21-bit raw position value read from the encoder via SPI
+
+\item \verb|uint32_t prevous_raw_value| -- previous raw position value, used to compute the delta between consecutive samples
+
+\item \verb|float angular_velocity| -- instantaneous angular velocity estimate (in rotations per second), 
+                                        computed from the filtered position increment
+
+\item \verb|float angular_velocity_ewma| -- exponentially weighted moving average (EWMA) of angular velocity
+                                            which is used for velocity control to reduce signal noise
+
+\item \verb|float angular_velocity_ewma_alpha| -- EWMA coefficient $\alpha$ for velocity filtering,
+                                                 defines the trade-off between responsiveness and noise suppression
+
+\item \verb|float ewma_value| -- EWMA filtered absolute position value derived from \verb|position_ticks|
+
+\item \verb|float ewma_previous_value| -- previous EWMA position value used for computing the filtered position difference
+
+\item \verb|float ewma_delta| -- difference between consecutive EWMA position values, serves as the basis for velocity estimation
+
+\item \verb|float ewma_alpha| -- EWMA coefficient $\alpha$ for position filtering, higher values reduce smoothing and improve responsiveness
+
+\item \verb|int64_t position_ticks| -- unwrapped absolute position in encoder ticks, accumulates deltas across revolutions without overflow
+
+\item \verb|int32_t last_delta| -- most recent position difference between samples
+
+\item \verb|uint8_t valid| -- data validity flag (currently not actively used)
+
+\item \verb|uint8_t magnetic_pole_pairs| -- number of motor pole pairs used to convert mechanical position to electrical angle
+
+\item \verb|uint32_t electrical_offset| -- calibrated offset between mechanical zero and electrical zero (obtained during calibration)
+
+\item \verb|uint32_t electrical_angle_raw| -- electrical angle expressed in raw encoder ticks (range $0$ to $2^{21}$)
+
+\item \verb|float electrical_angle| -- electrical angle in radians which is used directly in FOC (Park/Clarke transforms)
+
+\item \verb|uint32_t last_good_raw| -- last valid raw encoder value (CRC verified), used as a fallback in case of communication errors
+
+\item \verb|uint32_t crc_error_count| -- counter of CRC errors detected during SPI communication with the encoder
+
+\end{itemize}
+
+\subsection{Encoder initialization}
+
+The encoder is initialized using the \texttt{init\_encoder()} function. During initialization, the first raw encoder value is read and used to initialize both the current and previous position values. The absolute position counter, EWMA filters and velocity variables are initialized from this first measurement.
+
+The function also stores the number of motor pole pairs and the initial electrical offset. These parameters are required for conversion from mechanical position to electrical angle, which is used by the FOC algorithm.
+
+\subsection{Data reading and CRC control}
+
+Raw encoder data is read using the \texttt{mt6835\_read\_raw21()} function. The function sends a burst-read command to the MT6835 and 
+receives six bytes over SPI. The 21-bit angle value is reconstructed from the received data bytes
+containing \texttt{ANGLE[20:13]}, \texttt{ANGLE[12:5]} and \texttt{ANGLE[4:0]}.
+
+The encoder frame also contains status bits and an 8-bit CRC value. The module implements CRC-8 verification using a polynomial of \texttt{0x07} 
+and an initial value of \texttt{0x00}. If the CRC check fails, the error counter \texttt{crc\_error\_count} 
+is incremented and the last valid encoder value is reused. This prevents corrupted SPI measurements from directly affecting the control loop.
+
+\subsection{Position update and overflow handling}
+
+The encoder state is updated by calling \texttt{update\_encoder()}. 
+This function reads a new raw position value, verifies its CRC and computes the difference from the previous sample.
+
+Because the encoder position is cyclic, the difference calculation must handle overflow at the end of the 21-bit range. 
+If the measured difference is larger than half of the encoder modulo, the function assumes that the position crossed the overflow boundary
+ and corrects the delta accordingly. The corrected delta is then accumulated into \texttt{position\_ticks}.
+
+This approach makes it possible to track continuous mechanical position over multiple revolutions while still using an absolute single-turn encoder.
+
+
+\subsection{Velocity calculation and signal filtering}
+The instantaneous angular velocity is calculated from the filtered position difference. 
+The position signal is first processed by an exponentially weighted moving average filter. 
+The filtered position difference is then converted from encoder ticks per sample to revolutions per second using the known sampling period.
+
+The encoder module uses two EWMA filters. The first one filters the absolute position used for velocity estimation, 
+while the second one filters the resulting angular velocity. This reduces measurement noise and improves the stability of the velocity control loop.
+
+The velocity returned by \texttt{get\_angular\_velocity()} is the filtered angular velocity estimate. 
+The direction inversion flag is also taken into account, so the returned value has the correct sign with respect to the 
+configured motor direction.
+
+\subsection{Electrical angle calculation}
+
+After the mechanical position is updated, the module calculates the electrical angle required by the FOC algorithm. 
+First, the unwrapped mechanical position is reduced back into one mechanical revolution. 
+This value is multiplied by the number of motor pole pairs to obtain the corresponding electrical position.
+
+The calibrated electrical offset is then subtracted from this value. 
+The result is wrapped into the encoder range and converted to radians:
+
+\[
+    \theta_e = \frac{2\pi \cdot \texttt{electrical\_angle\_raw}}{2^{21}}
+\]
+
+The resulting electrical angle is stored in \texttt{electrical\_angle} and is used directly by the Park and inverse Park transformations in the FOC control loop.
+
 \subsection{Electrical offset calibration}
+Accurate alignment between the mechanical position acquired by the encoder and the electrical angle
+required by the FOC algorithm is essential for correct motor operation. 
+For this purpose, the encoder module provides the \texttt{calibrate\_electrical\_offset()} function.
+
+This function is blocking and must only be executed when the motor is not operating under closed loop control.
+It is recommended to perform the calibration with the motor unloaded.
+In a typical workflow, the calibration should be executed only once, the resulting electrical offset is read via the CAN interface, 
+stored and applied during normal operation either by client side updating the electrical offset via can interface or recompiling the firmware with
+adjusted default \texttt{ENCODER\_ELECTRICAL\_OFFSET} in \texttt{config.h} without repeating the calibration during firmware initialization.
+
+At the start of the calibration procedure, the ADC injected conversion interrupt is disabled, to stop the current control loop. 
+A static voltage vector is then applied to the motor using the inverse Park and inverse Clarke transformations followed by SVPWM duty cycle computation. 
+This forces the rotor into settle in a known and stable electrical position.
+
+After a short settling period, a sequence of encoder samples is collected and averaged in order to reduce measurement noise. 
+This value is then converted into the corresponding electrical position by accounting for the number of motor pole pairs:
 
 
-\subsection{Implemented functionality}
-\subsection{Electrical offset calibration}
+\[
+    \theta_{e\_raw} = \left( \theta_{m\_raw} \cdot p \right) \bmod 2^{21}
+\]
+where $\theta_{m\_raw}$ represents averaged mechanical position in encoder ticks and $p$ represents number of motor pole pairs.
+
+The computed value $\theta_{e\_raw}$ in a known mechanical position is then used as 
+the electrical offset $\theta_{\text{offset}}$ between the encoder mechanical zero and the actual electrical zero of the motor.
+
+This offset is then used during normal operation to compute the electrical angle in radians as:
+
+\[
+    \theta_e = \frac{2\pi}{2^{21}} \left( \theta_{m\_raw} \cdot p - \theta_{\text{offset}} \right)
+\]
+
+and is a crucial input to the FOC algorithm.
+
+Once the calibration procedure is complete, the PWM outputs are returned to a neutral duty cycle and the ADC interrupt is re-enabled, restoring the standard control loop execution.
+The calibrated offset is then consistently applied during runtime, ensuring correct phase alignment required for stable FOC operation.
+
+% \section{Driver}
+% \subsection{Current sensing offset calibration}
+
 
 \section{FOC implementation}
+\subsection{Park Clarke}
+
+\subsection{Trigonometric functions optimization}
+
 \subsection{Current control loop}
 \subsection{Velocity and position control loops}
 
+
 \section{Configuration abstraction layer}
+
+
+
 
 % \section{CAN communication}
 % \section{CAN client example}
