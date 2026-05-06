@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex thesis"] 1777923325.07669 "thesis.aux" "thesis.bbl" "thesis" 1777923327.16723 0
+["bibtex thesis"] 1778111627.59041 "thesis.aux" "thesis.bbl" "thesis" 1778111755.10963 0
   "./biblio_files/biblio_basic.bib" 1777100103.43499 6481 ae4ae43fa4b9e964f6022fc967208d93 ""
   "./biblio_files/railway_collision_avoidance.bib" 1777100103.43506 37332 5f8b05b8b1e422eb9e7e7be5f7e80edb ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/bibtex/bst/base/plain.bst" 1772380719 20613 bd3fbfa9f64872b81ac57a0dd2ed855f ""
-  "thesis.aux" 1777923326.84419 6297 d5b99d5c8e0eb87cf3f72e69efb5f7b5 "pdflatex"
+  "thesis.aux" 1778111754.66486 7092 b9618f4cd509b8f4c7cfa68d3fc3da39 "pdflatex"
   (generated)
   "thesis.bbl"
   "thesis.blg"
   (rewritten before read)
-["pdflatex"] 1777923325.12842 "/Users/mathiaspalme/Desktop/bakalarka/test_foc/thesis/thesis.tex" "thesis.pdf" "thesis" 1777923327.16738 0
+["pdflatex"] 1778111752.62895 "/Users/mathiaspalme/Desktop/bakalarka/test_foc/thesis/thesis.tex" "thesis.pdf" "thesis" 1778111755.10976 0
   "/Users/mathiaspalme/Desktop/bakalarka/test_foc/thesis/thesis.tex" 1777585292.50716 1702 f886836c5227756cc2e080f0bd3e7aa3 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1772380719 2971 def0b6c1f0b107b3b936def894055589 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1772380719 2900 1537cc8184ad1792082cd229ecc269f4 ""
@@ -233,17 +233,17 @@
   "doc_parts/acknowledgments.tex" 1777100103.4471 162 75b5acbaebef05e5f504018f06d400af ""
   "doc_parts/appendixes.tex" 1777910074.16042 2059 1fb654511688ad8d0ba88ff9fd2789c6 ""
   "doc_parts/conclusion.tex" 1777910074.04369 1054 46d82fc32cd3e219d31713c55308b287 ""
-  "doc_parts/firmware_implementation.tex" 1777923323.19086 19278 d76b961eb047264768426d42c2fe18cc ""
+  "doc_parts/firmware_implementation.tex" 1778111752.40554 29310 98c94d438658fb3d3ddadc82d7088b60 ""
   "doc_parts/foc_introduction.tex" 1777588495.68915 5476 3095a850be1297c8bf59debcc4db7c81 ""
   "doc_parts/introduction.tex" 1777585583.56295 13097 c331128b1f61e7d473036ca57a2d9c2c ""
   "doc_parts/nomenclature.tex" 1777100103.44748 973 701d85746cf9c2fa2da54feb5fd96bc6 ""
   "pdf_input_files/assignment.pdf" 1777391672.83211 1456485 ac06f7e071b6e06593cd37226a166ea8 ""
-  "thesis.aux" 1777923326.84419 6297 d5b99d5c8e0eb87cf3f72e69efb5f7b5 "pdflatex"
-  "thesis.bbl" 1777923325.12574 49 0eba253fc001332e731e8aba3f23127b "bibtex thesis"
+  "thesis.aux" 1778111754.66486 7092 b9618f4cd509b8f4c7cfa68d3fc3da39 "pdflatex"
+  "thesis.bbl" 1778111627.7007 49 0eba253fc001332e731e8aba3f23127b "bibtex thesis"
   "thesis.nls" 0 -1 0 ""
-  "thesis.out" 1777923326.84524 6565 7fdb14f9238eef6b608f825f9dd2991e "pdflatex"
+  "thesis.out" 1778111754.66701 7631 9a5570383aab7a54b3402d696d7dc7f0 "pdflatex"
   "thesis.tex" 1777585292.50716 1702 f886836c5227756cc2e080f0bd3e7aa3 ""
-  "thesis.toc" 1777923326.84552 3313 b2fabd7efcbf28ce29522aaa47ba3089 "pdflatex"
+  "thesis.toc" 1778111754.66828 3862 66d314e52d8b68b9cb812bb20d60ae5f "pdflatex"
   (generated)
   "thesis.aux"
   "thesis.log"

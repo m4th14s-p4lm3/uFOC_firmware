@@ -101,7 +101,7 @@ The encoder update is performed inside the ADC interrupt service routine,
 ensuring that position data is synchronized with current measurements and control execution. 
 As the SPI communication is performed in a blocking manner, its latency directly affects the execution time of the control loop.
 
-In contrast, communication with the gate driver is primarily used for configuration and status monitoring. 
+In contrast, communication with the gate driver is primarily used for configuration. 
 These operations are not time-critical and are performed outside the real-time control loop only during firmware initialization.
 
 The SPI peripheral operates at a clock frequency of approximately 32~MHz, 
@@ -176,13 +176,11 @@ Namely \texttt{encoder\_t} contains:
 \end{itemize}
 
 \subsection{Encoder initialization}
-
 The encoder is initialized using the \texttt{init\_encoder()} function. During initialization, the first raw encoder value is read and used to initialize both the current and previous position values. The absolute position counter, EWMA filters and velocity variables are initialized from this first measurement.
 
 The function also stores the number of motor pole pairs and the initial electrical offset. These parameters are required for conversion from mechanical position to electrical angle, which is used by the FOC algorithm.
 
 \subsection{Data reading and CRC control}
-
 Raw encoder data is read using the \texttt{mt6835\_read\_raw21()} function. The function sends a burst-read command to the MT6835 and 
 receives six bytes over SPI. The 21-bit angle value is reconstructed from the received data bytes
 containing \texttt{ANGLE[20:13]}, \texttt{ANGLE[12:5]} and \texttt{ANGLE[4:0]}.
@@ -192,7 +190,6 @@ and an initial value of \texttt{0x00}. If the CRC check fails, the error counter
 is incremented and the last valid encoder value is reused. This prevents corrupted SPI measurements from directly affecting the control loop.
 
 \subsection{Position update and overflow handling}
-
 The encoder state is updated by calling \texttt{update\_encoder()}. 
 This function reads a new raw position value, verifies its CRC and computes the difference from the previous sample.
 
@@ -215,18 +212,34 @@ The velocity returned by \texttt{get\_angular\_velocity()} is the filtered angul
 The direction inversion flag is also taken into account, so the returned value has the correct sign with respect to the 
 configured motor direction.
 
-\subsection{Electrical angle calculation}
 
+\subsection{EWMA filter}
+
+The exponentially weighted moving average (EWMA) is used in this implementation to filter noisy angle and angular velocity measurements.
+EWMA was chosen due to its low memory and computational requirements. Unlike a moving average, which requires storing \texttt{n} previous
+time series values, EWMA requires storing only one value. This value is then used to compute the new EWMA value and is subsequently overwritten.
+Therefore, EWMA represents a lightweight method for filtering signals on an embedded device with limited resources.
+
+EWMA can be represented by the following equation:
+\begin{equation}
+    EWMA_t = \alpha \cdot x_t + (1-\alpha) \cdot EWMA_{t-1}
+\end{equation}
+where $\alpha \in (0,1)$ is a user-defined weighting parameter, $x_t$ is the current value of the series, 
+and $EWMA_{t-1}$ is the previous filtered value.
+
+% https://corporatefinanceinstitute.com/resources/career-map/sell-side/capital-markets/exponentially-weighted-moving-average-ewma/
+
+
+\subsection{Electrical angle calculation}
 After the mechanical position is updated, the module calculates the electrical angle required by the FOC algorithm. 
 First, the unwrapped mechanical position is reduced back into one mechanical revolution. 
 This value is multiplied by the number of motor pole pairs to obtain the corresponding electrical position.
 
 The calibrated electrical offset is then subtracted from this value. 
 The result is wrapped into the encoder range and converted to radians:
-
-\[
+\begin{equation}
     \theta_e = \frac{2\pi \cdot \texttt{electrical\_angle\_raw}}{2^{21}}
-\]
+\end{equation}
 
 The resulting electrical angle is stored in \texttt{electrical\_angle} and is used directly by the Park and inverse Park transformations in the FOC control loop.
 
@@ -248,10 +261,10 @@ This forces the rotor into settle in a known and stable electrical position.
 After a short settling period, a sequence of encoder samples is collected and averaged in order to reduce measurement noise. 
 This value is then converted into the corresponding electrical position by accounting for the number of motor pole pairs:
 
-
-\[
+\begin{equation}
     \theta_{e\_raw} = \left( \theta_{m\_raw} \cdot p \right) \bmod 2^{21}
-\]
+\end{equation}
+
 where $\theta_{m\_raw}$ represents averaged mechanical position in encoder ticks and $p$ represents number of motor pole pairs.
 
 The computed value $\theta_{e\_raw}$ in a known mechanical position is then used as 
@@ -259,21 +272,140 @@ the electrical offset $\theta_{\text{offset}}$ between the encoder mechanical ze
 
 This offset is then used during normal operation to compute the electrical angle in radians as:
 
-\[
+\begin{equation}
     \theta_e = \frac{2\pi}{2^{21}} \left( \theta_{m\_raw} \cdot p - \theta_{\text{offset}} \right)
-\]
+\end{equation}
+
 
 and is a crucial input to the FOC algorithm.
 
 Once the calibration procedure is complete, the PWM outputs are returned to a neutral duty cycle and the ADC interrupt is re-enabled, restoring the standard control loop execution.
 The calibrated offset is then consistently applied during runtime, ensuring correct phase alignment required for stable FOC operation.
 
-% \section{Driver}
-% \subsection{Current sensing offset calibration}
+\section{BLDC motor driver}
+To control and measure currents in motor windings, a DRV8316C three-phase BLDC motor driver with built-in current sensing is used.
+The driver provides a configurable 6x or 3x PWM control scheme. 
+In this implementation, the 6 PWM mode is used, which allows full control over both high-side and low-side transistors, 
+enabling the implementation of advanced modulation strategies such as SVPWM and optimized current sensing.
+
+Communication with the gate driver is implemented via an SPI interface, which is shared with the magnetic encoder.
+Since both peripherals require different SPI configurations (clock polarity and phase), 
+the SPI peripheral is reconfigured before each transaction depending on the selected device. 
+Each device is accessed using a dedicated chip-select signal, ensuring that only one peripheral is active on the bus at a time.
+
+Unlike communication with the magnetic encoder, communication with the motor driver is not time-critical
+and is performed only during firmware initialization. As a result, it does not interfere with the time-critical execution of the FOC control loop.
+
+The DRV8316C interface is implemented as a reusable module located in \texttt{uFOC\_lib/driver}. 
+This module encapsulates all low-level interactions with the motor driver, including SPI communication and device configuration. 
+It also provides an abstraction for current sensing and PWM generation,
+allowing the higher-level control logic to remain independent of the specific hardware implementation. 
+By isolating driver-specific functionality into a dedicated module, the firmware maintains a modular structure
+and can be more easily adapted to different motor drivers if required.
+
+
+\subsection{PWM generation}
+PWM generation for the three motor phases is handled using the advanced timer TIM1.
+Since the DRV8316C driver is operated in 6 PWM mode, three main PWM outputs and three complementary
+PWM outputs are used to control the high-side and low-side transistors of the three-phase bridge.
+
+The PWM outputs are started by the \texttt{pwm\_init()} function, which enables all three PWM channels together with their complementary outputs.
+The duty cycles are updated using the \texttt{pwm\_set()} function. This function receives normalized duty cycle values for phases A, B and C
+in the range from 0 to 1.
+Before writing the values to the timer compare registers, the duty cycles are limited to this valid range in order to prevent invalid PWM states.
+
+The normalized duty cycle values are converted to timer compare values according to the auto-reload value of TIM1.
+The resulting compare values are then written to the corresponding timer channels, 
+which directly determine the switching duty cycle of each motor phase.
+This abstraction allows the FOC algorithm to work with normalized phase voltage commands without directly accessing timer registers.
+
+In normal operation, the duty cycle values are produced by the SVPWM algorithm and passed to the driver module as normalized phase commands.
+
+\subsection{SPI communication and driver configuration}
+The DRV8316C is configured through the SPI interface. 
+Since the SPI peripheral is shared with the magnetic encoder, the driver module first configures SPI3
+to match the communication mode required by the gate driver before each transaction. 
+For the DRV8316C, SPI is configured with low clock polarity and data sampling on the second clock edge.
+
+Communication with the driver is implemented using 16-bit SPI frames. 
+Each frame contains a read/write bit, a 6-bit register address, an 8-bit data field and a parity bit. 
+The parity bit is calculated from the remaining frame bits before transmission and is used by the driver to detect communication errors. 
+
+The driver initialization is performed by the \texttt{drv8316\_init()} function. 
+At the beginning of the initialization sequence, the driver chip-select signal is disabled 
+followed by a short delay to ensure a stable idle state of the SPI bus. 
+The driver registers are then unlocked and the required configuration values are written to the control registers.
+
+The \texttt{CTRL2} register is configured to clear existing fault flags, select the 6 PWM control mode, 
+set the output slew rate to 50~V/$\mu$s and enable the SDO mode required for SPI readback. 
+The \texttt{CTRL5} register is used to configure the gain of the integrated current sense amplifiers according 
+to the selected \texttt{drv8316\_csa\_gain\_t} value. 
+
+This value is passed as an argument to the \texttt{drv8316\_init()} function and
+should be selected by the user based on the used motor and expected current draw.
+An enum structure \texttt{drv8316\_csa\_gain\_t} was implemented to create an abstraction layer for the 
+\texttt{drv8316\_csa\_gain\_t} value and is later used for correct current conversion.
+
+The \texttt{CTRL6} register configures the internal buck converter for a 3.3~V output. 
+Setting the buck converter for a 3.3~V output is critical. Higher voltage will likely result in an instant MCU demidge.
+
+
+\subsection{Current sensing}
+Phase current measurement is implemented using the integrated current sense amplifiers (CSA) available in the DRV8316C motor driver. 
+
+Current sensing is configured during the driver initialization sequence through the \texttt{CTRL5} register, 
+where the gain of the internal current sense amplifiers is selected using the \texttt{drv8316\_csa\_gain\_t} enumeration.
+The selected gain directly affects the measurable current range and the current measurement resolution.
+Lower gain values allow measurement of higher currents, while higher gain values provide better resolution for lower current levels.
+The avialable gain configurations correspond to current conversion factors of 0.15, 0.3, 0.6 and 1.2~V/A.
+
+The amplified current sense signals are connected to ADC inputs of the STM32 microcontroller.
+Current sampling is synchronized with the PWM timer in order to obtain measurements 
+at deterministic points within the PWM cycle and minimize the influence of switching noise.
+The ADC conversions are triggered directly by the timer hardware, ensuring stable sampling timing independent of software execution latency.
+
+The PWM timer operates in center-aligned mode, which ensures symmetrical switching of the inverter transistors during the PWM period.
+This creates a stable interval around the middle of the PWM cycle where the phase currents are minimally affected by switching transients.
+As a result, ADC sampling performed in this interval provides more accurate and repeatable current measurements.
+
+The measured ADC values are converted to phase currents using the known ADC reference voltage, ADC resolution, shunt resistor value,
+and the configured CSA gain. Since the current sense amplifier outputs are offset to a reference voltage representing zero current,
+the measured ADC value must first be shifted by a calibrated offset value before the phase current is calculated.
+
+The driver implements the \texttt{driver\_current\_offsets\_t} structure to store calibrated offsets for each ADC channel separately.
+Since the ADC operates with 12-bit resolution, the \texttt{uint16\_t} data type is used to store the offset values.
+Furthermore, the \texttt{driver\_phase\_currents\_t} structure is implemented to store the latest current measurements 
+for individual motor phases as floating-point values in amperes.
+
+During normal operation of the FOC current control loop, the \texttt{driver\_phase\_currents\_from\_adc()} 
+function is used to convert raw ADC measurements into phase currents.
+The function receives raw ADC samples together with the calibrated offsets and configured CSA gain,
+and stores the converted current values into the \texttt{driver\_phase\_currents\_t} structure.
+
+
+\subsection{Current sensing offset calibration}
+The current sense amplifiers generate an output voltage centered around a predefined zero-current reference level,
+approximately in the middle of the ADC input range.
+Therefore, an offset calibration procedure is performed during firmware initialization.
+
+The driver module implements the \texttt{driver\_current\_calibrate\_offsets()} function, which receives a pointer to the
+\texttt{driver\_current\_offsets\_t} structure, pointers to variables containing raw ADC current samples,
+the number of calibration samples, and the delay between samples in milliseconds.
+
+The function itself does not perform ADC sampling directly.
+Therefore, the raw ADC current values must be continuously updated by the TIM1 interrupt routine while the calibration procedure is running.
+It is also required that the PWM outputs are already initialized and all PWM channels are set to a duty cycle of 0.5,
+ensuring that no phase current flows through the motor windings during calibration.
+Failure to satisfy these conditions may result in incorrect offset calibration.
+
+The calibration function averages the acquired ADC samples and stores the calculated offset values
+into the \texttt{driver\_current\_offsets\_t} structure.
+
 
 
 \section{FOC implementation}
 \subsection{Park Clarke}
+
 
 \subsection{Trigonometric functions optimization}
 
@@ -284,6 +416,7 @@ The calibrated offset is then consistently applied during runtime, ensuring corr
 \section{Configuration abstraction layer}
 
 
+% \section{}
 
 
 % \section{CAN communication}

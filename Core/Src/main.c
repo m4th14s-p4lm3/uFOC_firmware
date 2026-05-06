@@ -270,7 +270,7 @@ int main(void)
     &ia_raw,
     &ib_raw,
     &ic_raw,
-    256*4,
+    512,
     1) != HAL_OK) {
       Error_Handler();
     }

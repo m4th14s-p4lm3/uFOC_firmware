@@ -7,33 +7,32 @@
 extern TIM_HandleTypeDef htim1;
 extern SPI_HandleTypeDef hspi3;
 
-#define DRV8316_REG_CTRL1          (0x03u)
-#define DRV8316_REG_CTRL2          (0x04u)
-#define DRV8316_REG_CTRL5          (0x07u)
-#define DRV8316_REG_CTRL6          (0x08u)
+#define DRV8316_REG_CTRL1   (0x03u)
+#define DRV8316_REG_CTRL2   (0x04u)
+#define DRV8316_REG_CTRL5   (0x07u)
+#define DRV8316_REG_CTRL6   (0x08u)
 
-#define DRV8316_CTRL1_REG_LOCK_UNLOCK      (0x03u)
+#define DRV8316_CTRL1_REG_LOCK_UNLOCK (0x03u)
 
-#define DRV8316_CTRL2_CLR_FLT_MASK         (1u << 0)
-#define DRV8316_CTRL2_PWM_MODE_MASK        (3u << 1)
-#define DRV8316_CTRL2_SLEW_MASK            (3u << 3)
-#define DRV8316_CTRL2_SDO_MODE_MASK        (1u << 5)
-#define DRV8316_CTRL2_PWM_MODE_6X          (0u << 1)
-#define DRV8316_CTRL2_SLEW_50V_PER_US      (1u << 3)
+#define DRV8316_CTRL2_CLR_FLT_MASK    (1u << 0)
+#define DRV8316_CTRL2_PWM_MODE_MASK   (3u << 1)
+#define DRV8316_CTRL2_SLEW_MASK       (3u << 3)
+#define DRV8316_CTRL2_SDO_MODE_MASK   (1u << 5)
+#define DRV8316_CTRL2_PWM_MODE_6X     (0u << 1)
+#define DRV8316_CTRL2_SLEW_50V_PER_US (1u << 3)
 
-#define DRV8316_CTRL5_CSA_GAIN_MASK        (3u << 0)
+#define DRV8316_CTRL5_CSA_GAIN_MASK   (3u << 0)
 
-#define DRV8316_CTRL6_BUCK_DIS_MASK        (1u << 0)
-#define DRV8316_CTRL6_BUCK_SEL_MASK        (3u << 1)
-#define DRV8316_CTRL6_BUCK_CL_MASK         (1u << 3)
-#define DRV8316_CTRL6_BUCK_PS_DIS_MASK     (1u << 4)
-#define DRV8316_CTRL6_BUCK_3V3             (0u << 1)
+#define DRV8316_CTRL6_BUCK_DIS_MASK     (1u << 0)
+#define DRV8316_CTRL6_BUCK_SEL_MASK     (3u << 1)
+#define DRV8316_CTRL6_BUCK_CL_MASK      (1u << 3)
+#define DRV8316_CTRL6_BUCK_PS_DIS_MASK  (1u << 4)
+#define DRV8316_CTRL6_BUCK_3V3          (0u << 1)
 
-#define DRV8316_SPI_TIMEOUT_MS             (10u)
-#define DRV8316_SPI_CS_GUARD_DELAY_US      (1u)
+#define DRV8316_SPI_TIMEOUT_MS        (10u)
+#define DRV8316_SPI_CS_GUARD_DELAY_US (1u)
 
-static inline float clampf(float x, float lo, float hi)
-{
+static inline float clampf(float x, float lo, float hi) {
     if (x < lo) {
         return lo;
     }
@@ -43,18 +42,15 @@ static inline float clampf(float x, float lo, float hi)
     return x;
 }
 
-static inline void drv8316_select(void)
-{
+static inline void drv8316_select(void) {
     HAL_GPIO_WritePin(DRIVER_CS_GPIO_Port, DRIVER_CS_Pin, GPIO_PIN_RESET);
 }
 
-static inline void drv8316_deselect(void)
-{
+static inline void drv8316_deselect(void) {
     HAL_GPIO_WritePin(DRIVER_CS_GPIO_Port, DRIVER_CS_Pin, GPIO_PIN_SET);
 }
 
-static inline uint8_t drv8316_even_parity_15b(uint16_t value_wo_parity)
-{
+static inline uint8_t drv8316_even_parity_15b(uint16_t value_wo_parity) {
     uint16_t x = value_wo_parity;
     x ^= (uint16_t)(x >> 8);
     x ^= (uint16_t)(x >> 4);
@@ -63,8 +59,7 @@ static inline uint8_t drv8316_even_parity_15b(uint16_t value_wo_parity)
     return (uint8_t)(x & 0x01u);
 }
 
-static uint16_t drv8316_build_frame(bool read, uint8_t reg_addr, uint8_t data)
-{
+static uint16_t drv8316_build_frame(bool read, uint8_t reg_addr, uint8_t data) {
     uint16_t frame = 0u;
     frame |= (uint16_t)(read ? 1u : 0u) << 15;
     frame |= (uint16_t)(reg_addr & 0x3Fu) << 9;
@@ -73,8 +68,7 @@ static uint16_t drv8316_build_frame(bool read, uint8_t reg_addr, uint8_t data)
     return frame;
 }
 
-static HAL_StatusTypeDef spi3_configure_for_drv8316(void)
-{
+static HAL_StatusTypeDef spi3_configure_for_drv8316(void) {
     if (hspi3.Init.CLKPolarity == SPI_POLARITY_LOW &&
         hspi3.Init.CLKPhase == SPI_PHASE_2EDGE) {
         return HAL_OK;
@@ -85,14 +79,17 @@ static HAL_StatusTypeDef spi3_configure_for_drv8316(void)
     return HAL_SPI_Init(&hspi3);
 }
 
-static HAL_StatusTypeDef drv8316_spi_transfer(uint16_t tx_data, uint16_t *rx_data)
-{
+static HAL_StatusTypeDef drv8316_spi_transfer(uint16_t tx_data, uint16_t *rx_data) {
     HAL_StatusTypeDef status;
     uint8_t tx_buf[2] = {
         (uint8_t)((tx_data >> 8) & 0xFFu),
         (uint8_t)(tx_data & 0xFFu)
     };
     uint8_t rx_buf[2] = {0u, 0u};
+
+    if (rx_data == NULL) {
+        return HAL_ERROR;
+    }
 
     status = spi3_configure_for_drv8316();
     if (status != HAL_OK) {
@@ -113,22 +110,50 @@ static HAL_StatusTypeDef drv8316_spi_transfer(uint16_t tx_data, uint16_t *rx_dat
     return status;
 }
 
-static HAL_StatusTypeDef drv8316_write_reg(uint8_t reg_addr, uint8_t data)
-{
+static HAL_StatusTypeDef drv8316_write_reg(uint8_t reg_addr, uint8_t data) {
     uint16_t dummy_rx = 0u;
     return drv8316_spi_transfer(drv8316_build_frame(false, reg_addr, data), &dummy_rx);
 }
 
-static HAL_StatusTypeDef drv8316_update_reg(uint8_t reg_addr, uint8_t mask, uint8_t value)
-{
+static HAL_StatusTypeDef drv8316_read_reg(uint8_t reg_addr, uint8_t *data) {
+    uint16_t rx_word = 0u;
+    HAL_StatusTypeDef status;
+
+    if (data == NULL) {
+        return HAL_ERROR;
+    }
+
+    status = drv8316_spi_transfer(drv8316_build_frame(true, reg_addr, 0x00u), &rx_word);
+    if (status != HAL_OK) {
+        return status;
+    }
+
+    *data = (uint8_t)(rx_word & 0xFFu);
+    return HAL_OK;
+}
+
+static HAL_StatusTypeDef drv8316_update_reg(uint8_t reg_addr, uint8_t mask, uint8_t value) {
     uint8_t reg_val = 0u;
+
+    if (drv8316_read_reg(reg_addr, &reg_val) != HAL_OK) {
+        return HAL_ERROR;
+    }
 
     reg_val = (uint8_t)((reg_val & (uint8_t)(~mask)) | (value & mask));
     return drv8316_write_reg(reg_addr, reg_val);
 }
 
-void pwm_init(void)
-{
+static HAL_StatusTypeDef drv8316_unlock_registers(void) {
+    return drv8316_write_reg(DRV8316_REG_CTRL1, DRV8316_CTRL1_REG_LOCK_UNLOCK);
+}
+
+static HAL_StatusTypeDef drv8316_clear_faults(void) {
+    return drv8316_update_reg(DRV8316_REG_CTRL2,
+                              DRV8316_CTRL2_CLR_FLT_MASK,
+                              DRV8316_CTRL2_CLR_FLT_MASK);
+}
+
+void pwm_init(void) {
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
@@ -140,8 +165,7 @@ void pwm_init(void)
     TIM1->CCR4 = TIM1->ARR / 2;
 }
 
-void pwm_set(float du, float dv, float dw)
-{
+void pwm_set(float du, float dv, float dw) {
     const uint32_t arr = __HAL_TIM_GET_AUTORELOAD(&htim1);
 
     du = clampf(du, 0.0f, 1.0f);
@@ -153,8 +177,7 @@ void pwm_set(float du, float dv, float dw)
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, (uint32_t)(dw * (float)arr));
 }
 
-HAL_StatusTypeDef drv8316_init(drv8316_csa_gain_t csa_gain)
-{
+HAL_StatusTypeDef drv8316_init(drv8316_csa_gain_t csa_gain) {
     const uint8_t ctrl2 = DRV8316_CTRL2_CLR_FLT_MASK |
                           DRV8316_CTRL2_PWM_MODE_6X |
                           DRV8316_CTRL2_SLEW_50V_PER_US |
@@ -166,11 +189,18 @@ HAL_StatusTypeDef drv8316_init(drv8316_csa_gain_t csa_gain)
     drv8316_deselect();
     HAL_Delay(2);
 
+    drv8316_unlock_registers();
+
+    drv8316_write_reg(DRV8316_REG_CTRL2, ctrl2);
+    drv8316_write_reg(DRV8316_REG_CTRL5, ctrl5);
+    drv8316_write_reg(DRV8316_REG_CTRL6, ctrl6);
+    drv8316_clear_faults();
+    drv8316_read_reg(DRV8316_REG_CTRL2, &rb);
+
     return HAL_OK;
 }
 
-float drv8316_gain_to_v_per_a(drv8316_csa_gain_t gain)
-{
+float drv8316_gain_to_v_per_a(drv8316_csa_gain_t gain) {
     switch (gain) {
     case DRV8316_CSA_GAIN_0V15_PER_A:
         return 0.15f;
@@ -185,10 +215,7 @@ float drv8316_gain_to_v_per_a(drv8316_csa_gain_t gain)
     }
 }
 
-float driver_adc_to_current(uint16_t adc_raw,
-                            uint16_t offset_raw,
-                            drv8316_csa_gain_t gain)
-{
+float driver_adc_to_current(uint16_t adc_raw, uint16_t offset_raw, drv8316_csa_gain_t gain){
     const float gain_v_per_a = drv8316_gain_to_v_per_a(gain);
     const float adc_lsb_volts = DRIVER_ADC_VREF_VOLTS / DRIVER_ADC_MAX_COUNTS;
     const float delta_counts = (float)((int32_t)adc_raw - (int32_t)offset_raw);
@@ -197,13 +224,9 @@ float driver_adc_to_current(uint16_t adc_raw,
     return delta_volts / gain_v_per_a;
 }
 
-void driver_phase_currents_from_adc(driver_phase_currents_t *currents,
-                                    uint16_t ia_raw,
-                                    uint16_t ib_raw,
-                                    uint16_t ic_raw,
-                                    const driver_current_offsets_t *offsets,
-                                    drv8316_csa_gain_t gain)
-{
+void driver_phase_currents_from_adc(driver_phase_currents_t *currents, 
+                                    uint16_t ia_raw, uint16_t ib_raw, uint16_t ic_raw,
+                                    const driver_current_offsets_t *offsets, drv8316_csa_gain_t gain) {
     if ((currents == NULL) || (offsets == NULL) || (!offsets->valid)) {
         return;
     }
@@ -214,12 +237,8 @@ void driver_phase_currents_from_adc(driver_phase_currents_t *currents,
 }
 
 HAL_StatusTypeDef driver_current_calibrate_offsets(driver_current_offsets_t *offsets,
-                                                   volatile const uint16_t *ia_raw,
-                                                   volatile const uint16_t *ib_raw,
-                                                   volatile const uint16_t *ic_raw,
-                                                   uint16_t sample_count,
-                                                   uint32_t inter_sample_delay_ms)
-{
+                                                   volatile const uint16_t *ia_raw, volatile const uint16_t *ib_raw, volatile const uint16_t *ic_raw,
+                                                   uint16_t sample_count, uint32_t inter_sample_delay_ms) {
     uint32_t sum_a = 0u;
     uint32_t sum_b = 0u;
     uint32_t sum_c = 0u;

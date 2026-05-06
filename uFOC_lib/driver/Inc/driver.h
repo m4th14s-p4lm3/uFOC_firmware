@@ -12,30 +12,27 @@ extern "C" {
 #define DRIVER_ADC_VREF_VOLTS      (3.3f)
 #define DRIVER_ADC_MAX_COUNTS      (4095.0f)
 
-typedef enum
-{
+typedef enum {
     DRV8316_CSA_GAIN_0V15_PER_A = 0u,
     DRV8316_CSA_GAIN_0V30_PER_A = 1u,
     DRV8316_CSA_GAIN_0V60_PER_A = 2u,
     DRV8316_CSA_GAIN_1V20_PER_A = 3u
 } drv8316_csa_gain_t;
 
-typedef struct
-{
+typedef struct {
     uint16_t a;
     uint16_t b;
     uint16_t c;
     bool valid;
 } driver_current_offsets_t;
 
-typedef struct
-{
+typedef struct {
     float a;
     float b;
     float c;
 } driver_phase_currents_t;
 
-void pwm_init(void);
+void pwm_init();
 void pwm_set(float du, float dv, float dw);
 
 HAL_StatusTypeDef drv8316_init(drv8316_csa_gain_t csa_gain);
