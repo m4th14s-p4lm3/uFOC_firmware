@@ -283,6 +283,7 @@ Once the calibration procedure is complete, the PWM outputs are returned to a ne
 The calibrated offset is then consistently applied during runtime, ensuring correct phase alignment required for stable FOC operation.
 
 \section{BLDC motor driver}
+% https://www.ti.com/lit/ds/symlink/drv8316c.pdf?ts=1778069037563
 To control and measure currents in motor windings, a DRV8316C three-phase BLDC motor driver with built-in current sensing is used.
 The driver provides a configurable 6x or 3x PWM control scheme. 
 In this implementation, the 6 PWM mode is used, which allows full control over both high-side and low-side transistors, 
@@ -404,14 +405,26 @@ into the \texttt{driver\_current\_offsets\_t} structure.
 
 
 \section{FOC implementation}
+The FOC module located in \texttt{uFOC\_lib/foc} directory implements functions 
+for the Park and Clarke transformations as well as their inversions.
+Furhter more a separate function for the \texttt{SVPWM} modulation is implemented.
+To optimize trigonometric function execution speed, functions for sinus and cosinus calculations
+ware implemented using lookup tables.
+
+To encapsulate the FOC algorithm the \texttt{foc\_compute\_voltages} function was implemented,
+to execute Park-Clarke transform PI current control regulation and then back the inverse Clarke-Park transformations.
+
+
 \subsection{Park Clarke}
 
 
 \subsection{Trigonometric functions optimization}
 
-\subsection{Current control loop}
+\subsection{Current control loop} 
 \subsection{Velocity and position control loops}
 
+
+\subsection{FOC current loop}
 
 \section{Configuration abstraction layer}
 

@@ -167,14 +167,8 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc) {
                       &config.regulators.pi_d_current_axis, &config.regulators.pi_q_current_axis); // PI config.regulators
 
       // SVPWM control
-      float vmax = fmaxf(va, fmaxf(vb, vc));
-      float vmin = fminf(va, fminf(vb, vc));
-      float v0 = -0.5f * (vmax + vmin);
-      
-
-      float va_svpwm = va + v0;
-      float vb_svpwm = vb + v0;
-      float vc_svpwm = vc + v0;
+      float va_svpwm, vb_svpwm, vc_svpwm;
+      svpwm(&va, &vb, &vc, &va_svpwm, &vb_svpwm, &vc_svpwm);
 
       float du = 0.5f + va_svpwm / V_BUS_NOMINAL;
       float dv = 0.5f + vb_svpwm / V_BUS_NOMINAL;

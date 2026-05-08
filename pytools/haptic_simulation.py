@@ -10,29 +10,37 @@ client.set_control_state(3)
 time.sleep(0.01)
 client.set_angular_velocity_target(0)
 time.sleep(0.01)
+client.set_torque_current_soft_limit(1)
 
 delay = 0.005
 
+FORCE = 1
+
 def simulate_ridge(current_pos ,center, width, force):
     if current_pos > center - width and current_pos < center + width:
+        client.set_angular_velocity_soft_limit(15)
         client.set_torque_current_soft_limit(force) 
+        client.set_position_target(center)
+
         time.sleep(delay)
     else:
-        client.set_torque_current_soft_limit(0) 
+        client.set_torque_current_soft_limit(0)
+        client.set_angular_velocity_soft_limit(0)
+
 
 while True:
     pos = client.get_position()
     time.sleep(delay)
 
     # simulate_ridge(pos%1, 0.0, 0.05, 0.5)
-    simulate_ridge(pos%1, 0.2, 0.05, 0.5)
+    simulate_ridge(pos%1, 0.5, 0.1, FORCE)
     # simulate_ridge(pos%1, 0.4, 0.05, 0.5)
-    simulate_ridge(pos%1, 0.6, 0.05, 0.5)
+    simulate_ridge(pos%1, 1, 0.1, FORCE)
     # simulate_ridge(pos%1, 0.8, 0.05, 0.5)
     print(pos%1)
     time.sleep(delay)
 
-    client.set_position_target(pos)
+    # client.set_position_target(pos)
     time.sleep(delay)
 
     # target_torue = abs(pos/10)
