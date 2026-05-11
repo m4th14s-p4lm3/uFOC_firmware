@@ -142,8 +142,6 @@ float set_electrical_offset(config_t* config, float new_electrical_offset);
 
 
 
-
-
 // Unit conversion utils
 void set_user_angle_units(config_t* config, enum AngleUnits new_user_angle_units);
 enum AngleUnits get_user_angle_units(config_t* config);

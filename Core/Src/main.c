@@ -314,25 +314,25 @@ int main(void)
     
     
     // PRINT THIS DATA
-    // float velocity_rpm = -config.encoder.angular_velocity_ewma * 9.55741f;
+    float velocity_rpm = config.encoder.angular_velocity_ewma * 9.55741f;
     
     // sprintf(buffer, "%d\r\n", config.encoder.current_raw_value);
-    // sprintf(buffer, "%f %f %f %f\r\n", config.angular_velocity_target, config.angular_velocity_soft_limit, config.torque_current_target, velocity_rpm);
-    // print(buffer);
-    // HAL_Delay(10);
+    sprintf(buffer, "%f %f %f %f\r\n", config.angular_velocity_target, get_angular_velocity(&config.encoder));
+    print(buffer);
+    HAL_Delay(10);
 
     // Timer frequency check
-    uint32_t now = HAL_GetTick();
-    if (now - last_ms >= 1000) {
-        uint32_t cnt = adc_inj_cb_count;
-        uint32_t diff = cnt - last_count;
+    // uint32_t now = HAL_GetTick();
+    // if (now - last_ms >= 1000) {
+    //     uint32_t cnt = adc_inj_cb_count;
+    //     uint32_t diff = cnt - last_count;
 
-        sprintf(buffer, "ADC inj cb freq: %lu Hz\r\n", (unsigned long)diff);
-        print(buffer);
+    //     sprintf(buffer, "ADC inj cb freq: %lu Hz\r\n", (unsigned long)diff);
+    //     print(buffer);
 
-        last_count = cnt;
-        last_ms = now;
-    }
+    //     last_count = cnt;
+    //     last_ms = now;
+    // }
 
   }
     

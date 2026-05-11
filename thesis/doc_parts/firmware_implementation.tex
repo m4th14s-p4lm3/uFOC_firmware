@@ -405,31 +405,298 @@ into the \texttt{driver\_current\_offsets\_t} structure.
 
 
 \section{FOC implementation}
-The FOC module located in \texttt{uFOC\_lib/foc} directory implements functions 
-for the Park and Clarke transformations as well as their inversions.
-Furhter more a separate function for the \texttt{SVPWM} modulation is implemented.
-To optimize trigonometric function execution speed, functions for sinus and cosinus calculations
-ware implemented using lookup tables.
+The FOC module located in the \texttt{uFOC\_lib/foc} directory implements the mathematical core of the field-oriented control algorithm.
+The module provides functions for the Clarke and Park transformations together with their inverse transformations,
+which are used for conversion between the three-phase stationary reference frame and the rotating $dq$ reference frame.
 
-To encapsulate the FOC algorithm the \texttt{foc\_compute\_voltages} function was implemented,
-to execute Park-Clarke transform PI current control regulation and then back the inverse Clarke-Park transformations.
+The module also implements space vector PWM modulation through the \texttt{svpwm()} function,
+which converts the calculated phase voltage commands into normalized PWM duty cycles suitable for motor control.
 
+To reduce the computational cost of trigonometric operations, sine and cosine functions are implemented using a lookup table with linear interpolation.
+Compared to standard floating-point implementations from the \texttt{math.h} library, this approach significantly reduces control loop execution time.
+
+The main FOC algorithm is encapsulated in the \texttt{foc\_compute\_voltages()} function,
+which performs coordinate transformations, current control calculations, and generation of output voltage commands.
 
 \subsection{Park Clarke}
 
 
+
 \subsection{Trigonometric functions optimization}
+Trigonometric functions, namely sine and cosine, are used in the Park and inverse Park transformations.
+To reduce the computational cost and improve the execution speed of the FOC algorithm,
+a lookup table with linear interpolation was implemented for sine and cosine evaluation.
 
-\subsection{Current control loop} 
+During firmware initialization, the lookup table is generated using the \texttt{init\_sin\_table()} function.
+The number of samples stored in the lookup table is determined by the \texttt{SIN\_TABLE\_SIZE} constant defined in \texttt{foc.c}.
+The default number of values in this implementation was set to 128.
+The calculated values are stored in the \texttt{static float sin\_table[SIN\_TABLE\_SIZE]} array.
+
+Since the sine and cosine functions are related by
+
+\begin{equation}
+    \cos(x) = \sin\left(x + \frac{\pi}{2}\right)
+\end{equation}
+
+only a single sine lookup table is required.
+The cosine value is obtained by evaluating the sine function with a phase shift of $\frac{\pi}{2}$.
+
+Because the Park and inverse Park transformations always require both sine and cosine values for the same angle,
+a combined \texttt{fast\_sincos()} function was implemented.
+This function receives the electrical angle $\theta$ together with pointers to the output variables for the calculated sine and cosine values.
+
+To improve accuracy, linear interpolation between neighbouring lookup table samples is used.
+Compared to repeated evaluation of the standard \texttt{math.h} trigonometric functions,
+this approach significantly reduces execution time and improves determinism of the real time control loop.
+
+\subsection{FOC current control loop}
+The FOC current control loop is executed inside the \texttt{HAL\_ADCEx\_InjectedConvCpltCallback()} callback function,
+which is triggered after completion of the timer synchronized injected ADC conversion.
+This approach ensures deterministic execution timing and proper synchronization between current sampling and PWM generation.
+
+The control loop execution is divided into several steps.
+First, raw ADC samples from the current sense amplifiers are acquired and converted into phase currents expressed in amperes
+using the \texttt{driver\_phase\_currents\_from\_adc()} function from the \texttt{uFOC\_lib/driver} module.
+
+Next, the \texttt{update\_encoder()} function located in the \texttt{uFOC\_lib/encoder} module is called
+to obtain the updated rotor position and calculate the electrical angle required for the FOC transformations.
+
+After the current measurements and rotor position are updated,
+the firmware checks the currently selected control mode represented by the \texttt{ControlState} enumeration.
+The FOC current control algorithm is executed only when the control state is configured for current, velocity, or position control operation.
+
+If the FOC current control loop is enabled, the measured electrical angle, measured phase currents,
+and reference values for the torque and flux currents are passed to the \texttt{foc\_compute\_voltages()} function.
+
+Inside this function, the measured phase currents are transformed into the rotating $dq$ reference frame using the Clarke and Park transformations.
+The transformed current values are then compared with the reference current values,
+and the resulting current errors are processed by independent PI controllers for the $d$ and $q$ axes.
+The calculated voltage commands are subsequently transformed back into three-phase quantities
+using the inverse Park and inverse Clarke transformations.
+
+The resulting phase voltage commands are then passed to the \texttt{svpwm()} function,
+which generates normalized voltage values suitable for PWM generation.
+Finally, the calculated PWM duty cycles are normalized with respect to \texttt{V\_BUS\_NOMINAL}
+and applied to the motor driver using the \texttt{pwm\_set()} function.
+
 \subsection{Velocity and position control loops}
+In addition to the inner FOC current control loop, the firmware also implements higher level velocity and position control loops.
+These control loops are implemented as cascaded controllers, where the output of the higher level controller serves as the reference input for the lower level controller.
 
+Unlike the current control loop, which is synchronized with PWM generation and ADC sampling,
+the velocity and position control loops are executed independently inside the \texttt{HAL\_TIM\_PeriodElapsedCallback()} interrupt callback function triggered by \texttt{TIM6}.
+The control loops operate with a fixed sampling period of 0.5~ms corresponding to an update frequency of 2~kHz.
 
-\subsection{FOC current loop}
+The velocity control loop is enabled when the configured \texttt{ControlState} is set to \texttt{VELOCITY\_CONTROL} or higher.
+The current angular velocity filtered using EWMA is obtained from the encoder using the \texttt{get\_angular\_velocity()} function.
+The measured velocity is compared with the target velocity value and the resulting velocity error is processed by a 
+PI controller implemented using the regulator module located in \texttt{uFOC\_lib/pi\_controller}.
+
+A PI controller was selected instead of a full PID controller because experimental testing showed that the 
+derivative component significantly amplified measurement noise present in the calculated velocity signal, resulting in unstable and noisy control behaviour.
+The controller output is used as the reference torque current for the inner FOC current control loop.
+
+When the control mode is configured for position control, an additional outer position control loop is executed.
+The current rotor position is obtained using the \texttt{encoder\_get\_turns()} function and compared with the target position.
+The resulting position error is processed by a PID controller implemented using the same regulator module.
+
+Unlike the velocity controller, the derivative component proved beneficial for position control,
+where it reduced overshoot and improved transient response during experimental testing.
+The controller output generates the target angular velocity for the velocity control loop.
+
 
 \section{Configuration abstraction layer}
+The firmware implements a configuration abstraction layer located in the \texttt{uFOC\_lib/config} directory.
+This module centralizes storage and management of globally accessible configuration parameters used by the motor control firmware.
+
+The main purpose of the configuration module is to provide a unified interface for handling runtime configurable variables,
+such as target torque current, target velocity, target position, current and velocity limits,
+and the currently selected control mode.
+These parameters are stored inside the \texttt{config\_t} structure,
+which acts as the main shared configuration object used across the firmware.
+
+In addition to runtime configuration variables, the module also defines firmware constants and default parameters,
+including motor specific configuration values such as the number of magnetic pole pairs,
+encoder electrical offset and initial regulator limits.
+
+The module further implements multiple setter and getter functions used for safe access to configurable parameters.
+These functions are primarily intended for communication interfaces such as CAN bus control,
+but can also be used directly by the application firmware.
+Besides simplifying access to configuration variables, the abstraction layer also ensures that configurable values remain within predefined safety limits.
+
+The configuration module additionally implements unit conversion utilities for angular quantities.
+Internally, all angular values are represented in rotations,
+while the abstraction layer allows the user to work with rotations, radians, or degrees.
+Changing the selected user units only affects the external interface of the configuration module,
+while all internal calculations and stored values remain represented in rotations.
+
+\subsection{Configuration constants}
+The configuration module defines multiple compile-time constants used to configure firmware behaviour,
+motor parameters, communication settings, and default controller gains.
+These constants are defined in \texttt{config.h} and are used during firmware initialization.
+
+The implemented configuration constants include:
+
+\begin{itemize}
+    \item \texttt{CAN\_COMMUNICATION\_DEVICE\_ID} -- device identifier used for CAN communication and daisy-chain addressing
+    \item \texttt{CAN\_COMMUNICATION\_STD\_ID} -- standard CAN arbitration identifier used for communication
+    \item \texttt{DEFAULT\_USER\_UNITS} -- default angular units used by the configuration abstraction layer; the value must correspond 
+                                            to one of the options defined in the \texttt{AngleUnits} enumeration
+    \item \texttt{MOTOR\_MAGNETIC\_PAIRS} -- number of magnetic pole pairs of the motor rotor used for electrical angle calculation
+    \item \texttt{ENCODER\_ELECTRICAL\_OFFSET} -- default encoder electrical offset used for rotor position alignment
+    \item \texttt{ENCODER\_INVERT\_DIR} -- boolean value defining whether the encoder rotation direction is inverted
+    \item \texttt{V\_BUS\_NOMINAL} -- nominal DC bus voltage used for voltage normalization during PWM generation
+
+    \item \texttt{PI\_CURRENT\_KP} -- proportional gain of the current PI controllers shared by the $d$ and $q$ current control loops
+    \item \texttt{PI\_CURRENT\_KI} -- integral gain of the current PI controllers
+    \item \texttt{PI\_CURRENT\_HARD\_LIMIT} -- maximum allowed motor phase current
+    \item \texttt{PI\_CURRENT\_SOFT\_LIMIT} -- default software current limit used during normal operation
+
+    \item \texttt{PI\_VELOCITY\_KP} -- proportional gain of the angular velocity PI controller
+    \item \texttt{PI\_VELOCITY\_KI} -- integral gain of the angular velocity PI controller
+    \item \texttt{PI\_VELOCITY\_HARD\_LIMIT} -- maximum allowed angular velocity expressed in rotations per second
+    \item \texttt{PI\_VELOCITY\_SOFT\_LIMIT} -- default software angular velocity limit expressed in rotations per second
+
+    \item \texttt{PI\_POSITION\_KP} -- proportional gain of the position PID controller
+    \item \texttt{PI\_POSITION\_KI} -- integral gain of the position PID controller
+    \item \texttt{PI\_POSITION\_KD} -- derivative gain of the position PID controller
+\end{itemize}
 
 
-% \section{}
+
+\subsection{Config structure}
+The configuration layer implements the \texttt{config\_t} structure,
+which encapsulates the shared configuration and runtime control variables used throughout the firmware.
+
+To simplify handling of the implemented control regulators,
+an additional \texttt{regulators\_t} substructure is used to encapsulate all instances of the \texttt{PIController} and \texttt{PIDController} structures.
+The \texttt{regulators\_t} structure contains the following controller instances:
+
+\begin{itemize}
+    \item \texttt{PIController pi\_d\_current\_axis}
+    \item \texttt{PIController pi\_q\_current\_axis}
+    \item \texttt{PIController pi\_angular\_velocity}
+    \item \texttt{PIDController pid\_position}
+\end{itemize}
+
+The main \texttt{config\_t} structure stores the following configuration variables and runtime control parameters:
+
+\begin{itemize}
+    \item \texttt{regulators\_t regulators}
+
+    \item \texttt{float torque\_current\_target}
+    \item \texttt{float torque\_current\_soft\_limit}
+
+    \item \texttt{float flux\_current\_target}
+    \item \texttt{float flux\_current\_soft\_limit}
+
+    \item \texttt{float angular\_velocity\_target}
+    \item \texttt{float angular\_velocity\_soft\_limit}
+
+    \item \texttt{float position\_target}
+
+    \item \texttt{enum ControlState control\_state}
+    \item \texttt{enum AngleUnits user\_angle\_units}
+
+    \item \texttt{encoder\_t encoder}
+\end{itemize}
+
+The structure is initialized using the \texttt{init\_config()} function.
+During initialization, all target values are set to zero and the default software limits are configured using the predefined configuration constants.
+The initialization function also initializes all PI and PID controller structures using the default controller gains and limits defined in the configuration module.
+Finally, the control state is set to \texttt{NO\_CONTROL}.
+
+\subsection{Setters and getters}
+The configuration module provides a set of setter and getter functions used to access and modify selected configuration parameters.
+These functions form a controlled interface between the global configuration structure and other firmware modules,
+such as the CAN communication layer or the main application logic. 
+All setter and getter functions receive a pointer to the \texttt{config\_t} structure as their first argument.
+
+The implemented functions can be divided into several groups.
+The first group contains functions related to the selected control mode.
+The \texttt{set\_control\_state()} function updates the active control state and is used to enable or disable the implemented control loops.
+
+The second group contains functions for current control configuration.
+These functions allow modification of the torque current target, torque current software limit,
+and PI controller gains used by the inner current control loop.
+
+The third group contains functions for angular velocity control.
+They allow setting the target angular velocity, changing the velocity software limit,
+reading the configured velocity limit, and modifying the gains of the angular velocity PI controller.
+
+The position control functions provide access to the target position, measured position,
+and PID controller gains used by the outer position control loop.
+The measured position is obtained indirectly through the encoder instance stored inside the \texttt{config\_t} structure.
+
+The configuration module also provides functions for accessing and modifying the encoder electrical offset.
+This allows the electrical alignment value to be adjusted without directly accessing the encoder structure.
+
+Finally, the module implements utility functions for user unit configuration and angle conversion.
+The \texttt{set\_user\_angle\_units()} and \texttt{get\_user\_angle\_units()} functions configure the angular units used by the external interface.
+Conversion functions are provided for converting between the internally used rotation representation and user-facing units,
+including rotations, degrees, and radians.
+
+\subsection{Control state}
+The currently active control mode is represented by the \texttt{ControlState} enumeration,
+which determines which control loops are enabled during firmware operation.
+The \texttt{ControlState} enumeration contains the following values:
+
+\begin{itemize}
+    \item \texttt{NO\_CONTROL} -- all control loops are disabled
+    \item \texttt{CURRENT\_CONTROL} -- only the inner FOC current control loop regulating the flux and torque currents is enabled
+    \item \texttt{VELOCITY\_CONTROL} -- the velocity control loop together with the inner current control loop is enabled
+    \item \texttt{POSITION\_CONTROL} -- the position, velocity, and current control loops are enabled
+\end{itemize}
+
+The enumeration values are intentionally ordered to reflect the cascaded structure of the implemented control system.
+This arrangement allows individual control loops to determine whether they should be active using simple comparison operations.
+For example, the velocity controller only needs to check whether the current control state is greater than or equal to \texttt{VELOCITY\_CONTROL}.
+
+The control state can be modified using the \texttt{set\_control\_state()} function.
+Setting the control state to \texttt{NO\_CONTROL} disables all control loops
+and automatically sets all PWM outputs to a neutral duty cycle corresponding to zero motor voltage.
+
+
+\subsection{Limits configuration}
+The configuration abstraction layer implements hard and soft limits for selected control variables.
+
+Hard limits represent the physical limitations of the motor and power electronics,
+such as the maximum allowed phase current or maximum angular velocity.
+These limits are defined as compile-time configuration constants and cannot be modified during runtime operation.
+
+Soft limits are used to restrict the maximum output values used during normal operation of the control system.
+Unlike hard limits, soft limits can be modified during runtime using the implemented setter functions or through the CAN communication interface.
+
+The implemented setter functions automatically ensure that configured soft limits cannot exceed the corresponding hard limits.
+If a user attempts to set a soft limit above the allowed hard limit,
+the value is automatically clamped to the corresponding hard limit value.
+
+The same protection mechanism is also applied to target values such as target current, velocity, or position commands.
+Whenever a target value is updated using a setter function,
+the value is automatically limited to remain within the configured software limits.
+This prevents invalid control commands and improves operational safety of the motor control firmware.
+
+\subsection{Units conversion and configuration}
+The configuration module implements the \texttt{AngleUnits} enumeration used to store the currently selected user angle units.
+Although all internal angular quantities are represented in rotations,
+the abstraction layer allows the user to work with rotations, radians, or degrees.
+
+Because of this abstraction, setter functions internally convert user selected angle values into rotations,
+while getter functions convert internally stored rotation values back into the configured user units.
+
+To simplify these conversions, the configuration module implements the
+\texttt{convert\_rotations\_to\_user\_units()} and \texttt{convert\_user\_units\_to\_rotations()} functions.
+
+The \texttt{convert\_rotations\_to\_user\_units()} function receives a pointer to the active \texttt{config\_t} structure
+together with the value to convert expressed in rotations.
+Based on the currently configured \texttt{AngleUnits} value,
+the function converts the internal rotation value into the corresponding user units.
+
+Similarly, the \texttt{convert\_user\_units\_to\_rotations()} function converts a value expressed in user selected units
+into the internal rotation representation used throughout the firmware.
+
+These conversion functions are automatically used by all setter and getter functions working with angle values, namely position and angular velocty.
+As a result, the internal firmware implementation remains fully independent of the externally selected user units.
 
 
 % \section{CAN communication}

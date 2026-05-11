@@ -6,7 +6,7 @@
 #include "driver.h"
 #include "config.h"
 
-#define ANGULAR_VELOCITY_EWMA_ALPHA 0.5f
+#define ANGULAR_VELOCITY_EWMA_ALPHA 0.05f
 #define ANGLE_VALUE_EWMA_ALPHA  0.8f
 #define SAMPLE_DT 1.0f/8888.0f
 
