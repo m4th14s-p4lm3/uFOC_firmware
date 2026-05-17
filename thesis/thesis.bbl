@@ -33,6 +33,11 @@ Gabriele Magnani, Daniele Cattaneo, Michele Chiari, and Giovanni Agosta.
 \newblock In Jo\~{a}o Bispo, Stefano Cherubin, and Jos\'{e} Flich, editors, {\em 12th Workshop on Parallel Programming and Run-Time Management Techniques for Many-core Architectures and 10th Workshop on Design Tools and Architectures for Multicore Embedded Computing Platforms (PARMA-DITAM 2021)}, volume~88 of {\em Open Access Series in Informatics (OASIcs)}, pages 3:1--3:13, Dagstuhl, Germany, 2021. Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik.
 \newblock [Online; accessed 15-May-2026].
 
+\bibitem{electrical_offset}
+{Microchip Technology}.
+\newblock Fundamentals of field-oriented control, 2024.
+\newblock Accessed: 2026-05-17.
+
 \bibitem{svpwm_efficiency}
 {Microchip Technology Inc.}
 \newblock Space vector pulse width modulation, 2024.
@@ -48,10 +53,21 @@ Gabriele Magnani, Daniele Cattaneo, Michele Chiari, and Giovanni Agosta.
 \newblock Odrive micro, 2026.
 \newblock [Online; accessed 15-May-2026].
 
+\bibitem{pycan}
+{python-can project}.
+\newblock python-can documentation.
+\newblock \url{https://python-can.readthedocs.io/en/stable/}, 2026.
+\newblock [Online; accessed 17-May-2026].
+
 \bibitem{datasheet_MT6835}
 Shanghai MagnTek Microelectronics Inc.
 \newblock {\em 21-Bit High Accuracy Magnetic Angle Encoder IC}, 12 2022.
 \newblock [Online; accessed 15-May-2026].
+
+\bibitem{simplefoc_diagram}
+{SimpleFOC}.
+\newblock Field oriented control algorithm brief theory, 2024.
+\newblock Accessed: 2026-05-18.
 
 \bibitem{SimpleFOC}
 Antun Skuric, Hasan~Sinan Bank, Richard Unger, Owen Williams, and David González-Reyes.

@@ -9,6 +9,18 @@ resulting in two currents ($i_\alpha$, $i_\beta$) in a stationary reference fram
 Park transformation is then applied to transform the currents from a stationary reference frame to a rotating reference frame, resulting in two DC currents ($i_d$, $i_q$), 
 where $i_d$ is a flux current and $i_q$ is a torque current.
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figs/curr_frame.png}
+    \caption{Coordinate Transformations in FOC. \cite{simplefoc_diagram}}
+    \label{fig:coordinate_frames}
+\end{figure}
+
+The diagram in Figure~\ref{fig:coordinate_frames} shows the principle of Clarke and Park transformations used in FOC.
+Three phase stator currents are first projected from the $(a,b,c)$ coordinate system into the stationary $(\alpha,\beta)$ frame using Clarke transformation.
+The stationary vectors are then rotated by the electrical rotor angle $\theta_e$ into the rotating $(d,q)$ reference frame using Park transformation.
+This decomposition allows independent control of flux current $i_d$ and torque current $i_q$.
+
 To control $i_d$ and $i_q$ currents, two independent proportional-integral (PI) controllers are used to update applied voltage to the stator windings based on the error between the reference and the measured currents.
 In this implementation only the $i_q$ current reference is changed to control the torque, while the $i_d$ current reference is always set to zero to maximize the torque per ampere.
 
@@ -31,6 +43,7 @@ Aditionally, a position control loop can be implemented on top of the velocity c
 \end{figure}
 
 The Figure~\ref{fig:foc_diagram} shows the cascaded structure of the FOC control system. 
+
 
 
 
@@ -59,8 +72,8 @@ i_c
 
 The scaling factor $\frac{2}{3}$ ensures amplitude invariance between the three-phase and $i_\alpha$ $i_\beta$ representations.
 
-The Figure~\ref{fig:clarke_transformation} shows a Clarke transformation of 3-phase sinusoidal current into two orhogonal currents. 
 
+The Figure~\ref{fig:clarke_transformation} shows a Clarke transformation of 3-phase sinusoidal current into two orhogonal currents. 
 \begin{figure}[h]
     \centering
     \includegraphics[width=0.95\textwidth]{figs/clarke_transformation.pdf}
@@ -92,12 +105,9 @@ v_\beta
 \end{equation}
 
 
-
-
-
 \section{Park transformation}
 Park transformation is used to transform two orthogonal currents ($i_\alpha$, $i_\beta$) in a stationary reference frame from the stator point of view
-into two DC currents ($i_d$, $i_q$) in a rotating reference frame from a rotor point of view, where $i_d$ is a flux current and $i_q$ is a torque current.
+into two DC currents ($i_d$, $i_q$) in a rotating $dq$ reference frame from a rotor point of view, where $i_d$ is a flux current and $i_q$ is a torque current.
 To perfrom Park transformation, the electrical angle $\theta_e$ must to be calculated based on the rotor position, which can be obtained from the encoder reading.
 
 Park transformation can be represented as a matrix multiplication of the two orthogonal currents ($i_\alpha$, $i_\beta$) with the transformation matrix
@@ -207,13 +217,21 @@ U^{*} = -0.5 \left( \max\left(\sum_i v_{ref_i}\right) + \min\left(\sum_i v_{ref_
 
 and $v_{ref_i}$ represents the phase voltage references for phases $a$, $b$, and $c$. \cite{prayogo_foc}
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figs/svpwm.pdf}
+    \caption{Modulation of a sinusoidal three-phase current using SVPWM.}
+    \label{fig:svpwm}
+\end{figure}
+
+
 \section{Velocity and position control loops}
 
 The FOC torque control loop directly regulates the motor torque through the $i_q$ current component.
 Once torque control is established, higher-level control loops can be added on top of the inner current loop in order to control additional mechanical quantities.
 
 Angular velocity control can implemented using a cascaded control structure. \cite{SimpleFOC}
-The measured motor velocity derived from encoder readings is compared with the target velocity, 
+The measured motor velocity derived from encoder readings is compared with the target velocity,
 and the resulting error is processed by a PI controller.
 The output of the velocity controller generates the target torque-producing current $i_q$ for the inner FOC current control loop.
 In this way, motor velocity is indirectly controlled through regulation of the generated motor torque.
@@ -234,4 +252,12 @@ Typically, the inner current loop operates at the highest update frequency, whil
 due to slower mechanical system dynamics.
 
 \section{Electrical angle calculation}
+While encoder reading provides the mechanical angle of the motor shaft, the FOC algorithm operates with the electrical angle.
+The number of electrical rotations per one mechanical rotation is directly proportional to the number of pole pairs in the rotor.
+Therefore, the electrical angle $\theta_e$ can be expressed as
 
+\begin{equation}
+    \theta_e = P \cdot \theta_m
+\end{equation}
+
+where $P$ is the number of pole pairs and $\theta_m$ is the measured mechanical angle. \cite{electrical_offset}

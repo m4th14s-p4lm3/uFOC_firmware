@@ -111,7 +111,7 @@ The SPI peripheral operates at a clock frequency of approximately 32~MHz,
 configured using a prescaler of 2. This high communication speed minimizes the duration of blocking SPI transactions, 
 which is particularly important as encoder data acquisition is performed within the interrupt service routine.
 
-At this speed, the encoder read transaction takes only a few microseconds.
+% At this speed, the encoder read transaction takes only a few microseconds.
 
 \section{Encoder}
 The rotor position is measured using an MT6835 magnetic encoder with a 21-bit absolute resolution and SPI communication interface.\cite{datasheet_MT6835}
@@ -388,7 +388,7 @@ Since the ADC operates with 12-bit resolution, the \texttt{uint16\_t} data type 
 Furthermore, the \texttt{driver\_phase\_currents\_t} structure is implemented to store the latest current measurements 
 for individual motor phases as floating-point values in amperes.
 
-During normal operation of the FOC current control loop, the \texttt{driver\_phase\_currents\_from\_adc()} 
+During normal operation of the FOC current control loop, the\\ \texttt{driver\_phase\_currents\_from\_adc()} 
 function is used to convert raw ADC measurements into phase currents.
 The function receives raw ADC samples together with the calibrated offsets and configured CSA gain,
 and stores the converted current values into the \texttt{driver\_phase\_currents\_t} structure.
@@ -504,7 +504,7 @@ which performs coordinate transformations, current control calculations, and gen
 
 \subsection{Clarke and Park transformations}
 The Clarke and Park transformations are implemented by the \texttt{clarke\_transform()} and \texttt{park\_transform()} functions.
-Their inverse transformations are implemented by the \texttt{inv\_clarke\_transform()} and \texttt{inv\_park\_transform()} functions.
+Their inverse transformations are implemented by the\\ \texttt{inv\_clarke\_transform()} and \texttt{inv\_park\_transform()} functions.
 
 Optimizations were implemented in the Park and inverse Park transformations by using a precomputed look-up table for trigonometric functions.
 This optimization is further described in Chapter~\ref{trigonometric_optimitaion}.
@@ -514,7 +514,7 @@ This optimization is further described in Chapter~\ref{trigonometric_optimitaion
 \label{trigonometric_optimitaion}
 Trigonometric functions, namely sine and cosine, are used in the Park and inverse Park transformations.
 To reduce the computational cost and improve the execution speed of the FOC algorithm,
-a lookup table with linear interpolation was implemented for sine and cosine evaluation. \cite{TrigonometricFuncitonOptimization}
+a lookup table with linear interpolation was implemented for sine and cosine evaluation.~\cite{TrigonometricFuncitonOptimization}
 
 During firmware initialization, the lookup table is generated using the \texttt{init\_sin\_table()} function.
 The number of samples stored in the lookup table is determined by the \texttt{SIN\_TABLE\_SIZE} constant defined in \texttt{foc.c}.
@@ -576,7 +576,7 @@ In addition to the inner FOC toqrue control loop, the firmware also implements h
 These control loops are implemented as cascaded controllers, where the output of the higher level controller serves as the reference input for the lower level controller.
 
 Unlike the current control loop, which is synchronized with PWM generation and ADC sampling,
-the velocity and position control loops are executed independently inside the \texttt{HAL\_TIM\_PeriodElapsedCallback()} interrupt callback function triggered by \texttt{TIM6}.
+the velocity and position control loops are executed independently inside the\\ \texttt{HAL\_TIM\_PeriodElapsedCallback()} interrupt callback function triggered by \texttt{TIM6}.
 The control loops operate with a fixed sampling period of 0.5~ms corresponding to an update frequency of 2~kHz.
 
 The velocity control loop is enabled when the configured \texttt{ControlState} is set to \texttt{VELOCITY\_CONTROL} or higher.
@@ -776,7 +776,7 @@ the abstraction layer allows the user to work with rotations, radians, or degree
 Because of this abstraction, setter functions internally convert user selected angle values into rotations,
 while getter functions convert internally stored rotation values back into the configured user units.
 
-To simplify these conversions, the configuration module implements the
+To simplify these conversions, the configuration module implements the\\
 \texttt{convert\_rotations\_to\_user\_units()} and \texttt{convert\_user\_units\_to\_rotations()} functions.
 
 The \texttt{convert\_rotations\_to\_user\_units()} function receives a pointer to the active \texttt{config\_t} structure
@@ -796,7 +796,7 @@ The module provides an interface between external client connected to the CAN bu
 It allows an external controller to change the active control mode, update reference values, modify controller parameters, read selected feedback values, and execute encoder calibration.
 
 The communication module is divided into two main parts.
-The first part consists of \texttt{communication.h} and \texttt{communication.c}, which implement the low-level CAN interface.
+The first part consists of\\ \texttt{communication.h} and \texttt{communication.c}, which implement the low-level CAN interface.
 This includes CAN initialization, filter configuration, message transmission, message reception, and buffering of the last received frame.
 
 The second part consists of \texttt{commands.h} and \texttt{commands.c}, which implement the command layer.
@@ -813,7 +813,7 @@ This function stores the CAN handle internally and clears the receive buffer.
 
 The CAN peripheral is started using the \texttt{communication\_start()} function.
 This function first configures the CAN acceptance filter and then starts the CAN peripheral using \texttt{HAL\_CAN\_Start()}.
-After that, the RX FIFO 0 pending message interrupt is enabled using \texttt{HAL\_CAN\_ActivateNotification()}.
+After that, the RX FIFO 0 pending message interrupt is enabled using\\ \texttt{HAL\_CAN\_ActivateNotification()}.
 The implemented filter accepts all incoming messages, while the actual device addressing is handled later in software by checking the device ID stored in the message payload.
 
 Messages are transmitted using the \texttt{communication\_send()} function.
@@ -858,11 +858,14 @@ After the response message is assembled, the \texttt{communication\_send()} func
 The only exception is the \texttt{GET\_USER\_ANGLE\_UNITS} command, which does not return a floating point value but an \texttt{AngleUnits} enumeration value.
 For this reason, a custom message assembly procedure was implemented specifically for this command.
 
-\section{CAN client example}
-An example python client was implemented in \texttt{pytools/ufoc\_client.py} using pycan library.
-This python module implemnets a \texttt{uFOCclient} class... jada jada  
+\section{Python CAN client example}
+An example Python client was implemented in \texttt{pytools/ufoc\_client.py} using the \texttt{python-can} library. \cite{pycan}
+The module implements the \texttt{uFOCclient} class, which provides a high-level API for communication with the uFOC driver through a Makerbase CANable interface.
 
-The \texttt{ufoc\_client.py} was used mainly for testing purposes.
+The client implements helper functions for all commands defined in \texttt{commands.h}, including configuration of control modes, 
+regulator parameters, target values, and reading feedback values from the driver.
+
+The \texttt{ufoc\_client.py} module was primarily used for firmware testing and validation of CAN communication functionality.
 
 
 

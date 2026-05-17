@@ -11,7 +11,7 @@
 // Currents units are always ampers
 
 
-#define CAN_COMMUNICATION_DEVICE_ID 0x0 // Device ID for CAN daisy chaining
+#define CAN_COMMUNICATION_DEVICE_ID 0x00 // Device ID for CAN daisy chaining
 #define CAN_COMMUNICATION_STD_ID 0x123
 
 #define DEFAULT_USER_UNITS ROTATIONS // Choose from enum AngleUnits
@@ -26,8 +26,8 @@
 
 // Current loop PI regulator values
 #define PI_CURRENT_KP 1.0f
-#define PI_CURRENT_KI 300.0f
-#define PI_CURRENT_HARD_LIMIT 1.0f // Ampers per phase
+#define PI_CURRENT_KI 1000.0f
+#define PI_CURRENT_HARD_LIMIT 0.75f // Ampers per phase
 #define PI_CURRENT_SOFT_LIMIT PI_CURRENT_HARD_LIMIT // Replace PI_CURRENT_HARD_LIMIT to set your own initial value
 
 
