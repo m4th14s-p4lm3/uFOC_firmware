@@ -1,13 +1,13 @@
 # Fdb version 4
-["bibtex thesis"] 1779058378.44237 "thesis.aux" "thesis.bbl" "thesis" 1779058382.27513 0
+["bibtex thesis"] 1779059069.35355 "thesis.aux" "thesis.bbl" "thesis" 1779059071.0571 0
   "./biblio_files/biblio_basic.bib" 1779057645.15061 5895 a3dfca41ef0cf59d54aabd9b3340f415 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/bibtex/bst/base/plain.bst" 1772380719 20613 bd3fbfa9f64872b81ac57a0dd2ed855f ""
-  "thesis.aux" 1779058382.09425 13086 5c96f5ba318affdb11bbfe44a99bc629 "pdflatex"
+  "thesis.aux" 1779059070.86978 12877 856efdf4f0bb2bb4a8d323f9bf50f062 "pdflatex"
   (generated)
   "thesis.bbl"
   "thesis.blg"
   (rewritten before read)
-["pdflatex"] 1779058380.65302 "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" "thesis.pdf" "thesis" 1779058382.27524 0
+["pdflatex"] 1779059069.40155 "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" "thesis.pdf" "thesis" 1779059071.05722 0
   "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" 1778963792.38159 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1772380719 2971 def0b6c1f0b107b3b936def894055589 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1772380719 2900 1537cc8184ad1792082cd229ecc269f4 ""
@@ -233,9 +233,9 @@
   "ctu_logo/cvut_symbol.pdf" 1778506499 11282 f6a41de0d5ef245e516cf6e5c2b48207 ""
   "doc_parts/abstract.tex" 1778969245.83594 1125 a2ca08ed8f8808e986b8243a56dc291b ""
   "doc_parts/acknowledgments.tex" 1778506499 162 75b5acbaebef05e5f504018f06d400af ""
-  "doc_parts/conclusion.tex" 1778506499 1054 46d82fc32cd3e219d31713c55308b287 ""
-  "doc_parts/firmware_implementation.tex" 1779058380.42916 60775 180264e2067f93fc92fe925234137bf4 ""
-  "doc_parts/foc_introduction.tex" 1779058001.58163 11958 c29d429c4aaf30a3627ceee206cef6b2 ""
+  "doc_parts/conclusion.tex" 1779059067.43326 44 ca587a0b53614af4ecf2b6d4faa4bc95 ""
+  "doc_parts/firmware_implementation.tex" 1779058964.87491 60805 9058d5b3d62bd9665fbe8bad5bdd36b4 ""
+  "doc_parts/foc_introduction.tex" 1779058696.13424 11992 341148aac9f2bb6d85797d2ea1cf22ca ""
   "doc_parts/future.tex" 1778964184.35781 267 c81d372a7f146945fdc871ee4042ffdc ""
   "doc_parts/introduction.tex" 1779028573.47218 2351 3300053fb3ba408dd6a45c9ba14bfabf ""
   "doc_parts/nomenclature.tex" 1778506499 973 701d85746cf9c2fa2da54feb5fd96bc6 ""
@@ -249,12 +249,12 @@
   "figs/svpwm.pdf" 1778793571.65679 16832 dd10da1490086493e4c7edd2e1dec34d ""
   "figs/velocity_testing.pdf" 1778793672.37832 31645 cdee66ddde11aedf13f69ffe031f1fbe ""
   "pdf_input_files/assignment.pdf" 1778506499 1456485 ac06f7e071b6e06593cd37226a166ea8 ""
-  "thesis.aux" 1779058382.09425 13086 5c96f5ba318affdb11bbfe44a99bc629 "pdflatex"
-  "thesis.bbl" 1779058378.48726 3165 6a40a5a7f235f46604a60bcbf9651b6f "bibtex thesis"
+  "thesis.aux" 1779059070.86978 12877 856efdf4f0bb2bb4a8d323f9bf50f062 "pdflatex"
+  "thesis.bbl" 1779059069.39899 3331 c5c34897748c365d998a8bba8877a7ad "bibtex thesis"
   "thesis.nls" 0 -1 0 ""
-  "thesis.out" 1779058382.09531 10698 8566e63973b0431c7e429c27e52900ea "pdflatex"
+  "thesis.out" 1779059070.87085 10585 cb7d1e7a3fe83cee3036bd12dcaaebef "pdflatex"
   "thesis.tex" 1778963792.38159 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
-  "thesis.toc" 1779058382.0955 5375 16f327dda43ffb97a5cc8df8498d4301 "pdflatex"
+  "thesis.toc" 1779059070.87104 5306 fccddf5db52b7be6522834b9a1419841 "pdflatex"
   (generated)
   "thesis.aux"
   "thesis.log"

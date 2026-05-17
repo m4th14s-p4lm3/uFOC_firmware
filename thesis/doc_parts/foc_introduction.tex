@@ -46,7 +46,7 @@ The Figure~\ref{fig:foc_diagram} shows the cascaded structure of the FOC control
 
 
 
-
+\newpage
 \section{Clarke transformation}
 Clarke transformation is used to transform three phase currents ($i_a$, $i_b$, $i_c$) into two orthogonal currents ($i_\alpha$, $i_\beta$) in a stationary reference frame,
 where $i_\alpha$ is torque generating current and $i_\beta$ is flux producing current.
@@ -104,7 +104,7 @@ v_\beta
 \end{bmatrix}.
 \end{equation}
 
-
+\newpage
 \section{Park transformation}
 Park transformation is used to transform two orthogonal currents ($i_\alpha$, $i_\beta$) in a stationary reference frame from the stator point of view
 into two DC currents ($i_d$, $i_q$) in a rotating $dq$ reference frame from a rotor point of view, where $i_d$ is a flux current and $i_q$ is a torque current.
@@ -162,6 +162,7 @@ v_q
 \end{bmatrix}.
 \end{equation}
 
+\newpage
 \section{PI and PID regulators}
 
 Proportional-Integral (PI) controllers are used in the FOC algorithm to regulate the $d$-axis and $q$-axis currents by adjusting the corresponding voltages ($v_d$, $v_q$).
@@ -195,6 +196,7 @@ In the implemented cascaded control structure, PI controllers are used for curre
 For position control, a Proportional-Integral-Derivative (PID) controller is additionally used to improve damping and reduce overshoot.
 The PID controller generates the target angular velocity for the inner velocity control loop. \cite{SimpleFOC}
 
+\newpage
 
 \section{Space vector modulation}
 

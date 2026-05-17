@@ -279,8 +279,8 @@ where $\theta_{\text{m\_raw}}$ represents averaged mechanical position in encode
 
 The computed value $\theta_{\text{e\_raw}}$ in a known mechanical position is then used as 
 the electrical offset $\theta_{\text{offset}}$ between the encoder mechanical zero and the actual electrical zero of the motor.
-
-This offset is then used during normal operation to compute the electrical angle in radians as:
+\newpage
+This offset is then used during normal operation to compute the electrical angle in radians as
 
 \begin{equation}
     \theta_e = \frac{2\pi}{2^{21}} \left( \theta_{\text{m\_raw}} \cdot p - \theta_{\text{offset}} \right)
@@ -297,7 +297,7 @@ The calibrated offset is then consistently applied during runtime, ensuring corr
 To control and measure currents in motor windings, a DRV8316C three-phase BLDC motor driver with built-in current sensing is used.
 The driver provides a configurable 6x or 3x PWM control scheme. 
 In this implementation, the 6 PWM mode is used, which allows full control over both high-side and low-side transistors, 
-enabling the implementation of advanced modulation strategies such as SVPWM and optimized current sensing.
+enabling the implementation of advanced modulation strategies such as SVPWM and optimized current sensing.~\cite{datasheet_DRV8316C}
 
 Communication with the gate driver is implemented via an SPI interface, which is shared with the magnetic encoder.
 Since both peripherals require different SPI configurations (clock polarity and phase), 
@@ -312,7 +312,7 @@ This module encapsulates all low-level interactions with the motor driver, inclu
 It also provides an abstraction for current sensing and PWM generation,
 allowing the higher-level control logic to remain independent of the specific hardware implementation. 
 By isolating driver-specific functionality into a dedicated module, the firmware maintains a modular structure
-and can be more easily adapted to different motor drivers if required. \cite{TI_DRV8316C}
+and can be more easily adapted to different motor drivers if required.
 
 
 \subsection{PWM generation}
@@ -393,7 +393,7 @@ function is used to convert raw ADC measurements into phase currents.
 The function receives raw ADC samples together with the calibrated offsets and configured CSA gain,
 and stores the converted current values into the \texttt{driver\_phase\_currents\_t} structure.
 
-
+\newpage
 \subsection{Current sensing offset calibration}
 The current sense amplifiers generate an output voltage centered around a predefined zero-current reference level,
 approximately in the middle of the ADC input range.
@@ -626,7 +626,7 @@ while all internal calculations and stored values remain represented in rotation
 The configuration module defines multiple compile-time constants used to configure firmware behaviour,
 motor parameters, communication settings, and default controller gains.
 These constants are defined in \texttt{config.h} and are used during firmware initialization.
-
+\newpage
 The implemented configuration constants include:
 
 \begin{itemize}

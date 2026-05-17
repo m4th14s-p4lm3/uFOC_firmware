@@ -75,6 +75,11 @@ Antun Skuric, Hasan~Sinan Bank, Richard Unger, Owen Williams, and David Gonzále
 \newblock {\em Journal of Open Source Software}, 7(74):4232, 2022.
 \newblock [Online; accessed 15-May-2026].
 
+\bibitem{datasheet_DRV8316C}
+Texas Instruments.
+\newblock {\em DRV8316C Three-Phase Integrated FET Motor Driver}, 10 2025.
+\newblock [Online; accessed 15-May-2026].
+
 \bibitem{uFOC}
 Bc. Šimon Pecháček.
 \newblock ufoc hardware, 2025.
