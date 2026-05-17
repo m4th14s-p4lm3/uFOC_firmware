@@ -1,8 +1,9 @@
 \chapter{Firmware implementation}
 \section{Used technologies and development tools}
 STM32CubeMX was used to simplify the initial project setup, while the HAL library was employed to facilitate peripheral configuration
-and management. The firmware was implemented in the C programming language. CAN communication testing was performed using a Makerbase CANable V2.0 
-USB interface together with a Python based client script built on the pycan library. * Also compilation should be mantioned *
+and management. The firmware was implemented in the C programming language. CAN communication testing was performed using a 
+Makerbase CANable V2.0 USB interface together with a Python based client script built on the pycan library. 
+* Also compilation should be mantioned * 
 
 Arduino IDE was used as a serial monitor for debugging purposes.
 \section{Firmware topology}
@@ -12,17 +13,23 @@ Peripheral initialization and high-level application logic are implemented in \t
 uFOC\_lib contains the following modules:
 \begin{itemize}
     \item \texttt{driver} - handles DRV8316CRRGFR driver configuration and control, ADC current sensing and PWM generation.
-    \item \texttt{encoder} - handles MT6835GT encoder SPI configuration, positional data reading, angular velocity calculation and signal filtering.
-    \item \texttt{foc} - implements all necessary transformations, to perform FOC control as well as goniometric functions optimizations and SVPWM calculations.
-    \item \texttt{config} - is used to store and control global configuration parameters of the firmware. This module implements an abstraction layer to simplify the access to the configuration parameters and ensure that they are updated correctly.
+    \item \texttt{encoder} - handles MT6835GT encoder SPI configuration, positional data reading, 
+                            angular velocity calculation and signal filtering.
+    \item \texttt{foc} - implements all necessary transformations, to perform FOC control as well as 
+                            trigonometric functions optimizations and SVPWM calculations.
+    \item \texttt{config} - is used to store and control global configuration parameters of the firmware. 
+                            This module implements an abstraction layer to simplify the access 
+                            to the configuration parameters and ensure that they are updated correctly.
     \item \texttt{pi\_controller} - implements PI and PID controllers with anti-windup and output saturation.
     \item \texttt{communication} - manages CAN communication, including message parsing and sending.
 \end{itemize}
 
 The current control loop, together with current sampling and encoder reading, is executed in the ADC injected conversion complete interrupt,
-which is triggered by the \texttt{TIM1\_CC4} event at a frequency of 5~kHz. This ensures precise alignment between current measurement and the PWM cycle.
+which is triggered by the \texttt{TIM1\_CC4} event at a frequency of 8888~Hz. This ensures precise alignment between current measurement and the PWM cycle.
+The selected control loop frequency corresponds to the maximum rate at which the current implementation of the FOC algorithm can be executed reliably.
+The main performance limitation is currently the SPI based encoder communication.
 
-Higher-level control loops, namely velocity and position control, are executed in a separate timer interrupt (\texttt{TIM6}) at a lower frequency of 1125~Hz, 
+Higher-level control loops, namely velocity and position control, are executed in a separate timer interrupt (\texttt{TIM6}) at a lower frequency of 2000~Hz, 
 reflecting the cascaded structure of the control system.
 
 This separation of control loops follows common practice in motor control systems, 
@@ -49,7 +56,6 @@ This clock distribution enables deterministic timing of control loops and suppor
 TIM6 is clocked from the APB1 timer clock. Although the APB1 peripheral clock is prescaled to 32~MHz, the timer clock is doubled to 64~MHz due to the APB1 prescaler being different from one. TIM6 is configured with a prescaler of 31 and an auto-reload value of 999, resulting in an update interrupt frequency of 2~kHz.
 
 
-
 \subsection{Timer configuration}
 The advanced timer TIM1 is used for PWM generation. It is configured in center aligned mode, 
 which reduces switching harmonics and is commonly used in motor control applications. 
@@ -71,13 +77,12 @@ at a well-defined point within the PWM cycle. This synchronization minimizes mea
 The ADC conversion complete interrupt is used to process the measured currents and execute the current control loop.
 
 \subsection{PWM ADC synchronization}
-Precise synchronization between PWM generation and current measurement is achieved by using a timer-generated trigger for ADC conversions.
+In order to ensures deterministic timing and minimize control latency
+a precise synchronization between PWM generation and current measurement is achieved by using a timer-generated trigger for ADC conversions.
 The TIM1 compare event (\texttt{CC4}) initiates the ADC injected sequence, and the corresponding interrupt is used to execute the control algorithm.
 
 The trigger signal is generated by a dedicated compare channel that is not used for PWM output, 
 allowing independent adjustment of the sampling point within the PWM cycle.
-
-This approach ensures deterministic timing and minimizes control latency.
 
 \subsection{Communication interfaces}
 The MCU communicates with external systems primarily via the CAN interface, which is used for command exchange and system control. 
@@ -88,8 +93,6 @@ The bit timing parameters are configured to achieve a communication speed of 500
 This interface is used for command exchange and system control and operates independently of the real-time control loops.
 
 A UART interface is also available and is used only for debugging and diagnostic output during development.
-
-\subsection{SPI interfaces}
 
 SPI communication is used to interface with external peripherals, namely the magnetic encoder and the gate driver. 
 Both devices share a single SPI peripheral, with separate chip-select signals used to access each device.
@@ -110,9 +113,8 @@ which is particularly important as encoder data acquisition is performed within 
 
 At this speed, the encoder read transaction takes only a few microseconds.
 
-
 \section{Encoder}
-The rotor position is measured using an MT6835 magnetic encoder with a 21-bit absolute resolution and SPI communication interface.
+The rotor position is measured using an MT6835 magnetic encoder with a 21-bit absolute resolution and SPI communication interface.\cite{datasheet_MT6835}
 The encoder interface is implemented as a reusable module located in \texttt{uFOC\_lib/encoder}. This module provides encoder initialization, 
 raw position acquisition, CRC verification, position unwrapping, velocity estimation, signal filtering and electrical offset calibration.
 
@@ -202,13 +204,21 @@ This approach makes it possible to track continuous mechanical position over mul
 
 \subsection{Velocity calculation and signal filtering}
 The instantaneous angular velocity is calculated from the filtered position difference. 
-The position signal is first processed by an exponentially weighted moving average filter. 
+The position signal is first processed by an Exponentially Weighted Moving Average (EWMA) filter. 
 The filtered position difference is then converted from encoder ticks per sample to revolutions per second using the known sampling period.
 
-The encoder module uses two EWMA filters. The first one filters the absolute position used for velocity estimation, 
-while the second one filters the resulting angular velocity. This reduces measurement noise and improves the stability of the velocity control loop.
+The encoder module uses two EWMA filters. The first one filters the absolute position used for velocity estimation.
+Velocity $v_t$ is then esstimated by a simple differentiation
+\begin{equation}
+    v_t = \frac{p_t - p _{t-1}}{dt},
+\end{equation}
+where $p_t$ is the latest position sample after EWMA filtering $p_{t-1}$ is the previous position sample after EWMA filtering
+and $dt$ is time difference between samples determined by encoder sampeling period.
 
-The velocity returned by \texttt{get\_angular\_velocity()} is the filtered angular velocity estimate. 
+The second EWMA filter is then applied to the velocity esstimations. 
+This reduces measurement noise and improves the stability of the velocity control loop.
+
+The velocity returned by \texttt{get\_angular\_velocity()} is the filtered angular velocity estimate from filtered absolute positions. 
 The direction inversion flag is also taken into account, so the returned value has the correct sign with respect to the 
 configured motor direction.
 
@@ -220,12 +230,12 @@ EWMA was chosen due to its low memory and computational requirements. Unlike a m
 time series values, EWMA requires storing only one value. This value is then used to compute the new EWMA value and is subsequently overwritten.
 Therefore, EWMA represents a lightweight method for filtering signals on an embedded device with limited resources.
 
-EWMA can be represented by the following equation:
+EWMA can be represented by the equation
 \begin{equation}
-    EWMA_t = \alpha \cdot x_t + (1-\alpha) \cdot EWMA_{t-1}
+    EWMA_t = \alpha \cdot x_t + (1-\alpha) \cdot EWMA_{t-1},
 \end{equation}
 where $\alpha \in (0,1)$ is a user-defined weighting parameter, $x_t$ is the current value of the series, 
-and $EWMA_{t-1}$ is the previous filtered value.
+and $EWMA_{t-1}$ is the previous filtered value. \cite{ewma}
 
 % https://corporatefinanceinstitute.com/resources/career-map/sell-side/capital-markets/exponentially-weighted-moving-average-ewma/
 
@@ -262,18 +272,18 @@ After a short settling period, a sequence of encoder samples is collected and av
 This value is then converted into the corresponding electrical position by accounting for the number of motor pole pairs:
 
 \begin{equation}
-    \theta_{e\_raw} = \left( \theta_{m\_raw} \cdot p \right) \bmod 2^{21}
+    \theta_{\text{e\_raw}} = \left( \theta_{\text{m\_raw}} \cdot p \right) \bmod 2^{21}
 \end{equation}
 
-where $\theta_{m\_raw}$ represents averaged mechanical position in encoder ticks and $p$ represents number of motor pole pairs.
+where $\theta_{\text{m\_raw}}$ represents averaged mechanical position in encoder ticks and $p$ represents number of motor pole pairs.
 
-The computed value $\theta_{e\_raw}$ in a known mechanical position is then used as 
+The computed value $\theta_{\text{e\_raw}}$ in a known mechanical position is then used as 
 the electrical offset $\theta_{\text{offset}}$ between the encoder mechanical zero and the actual electrical zero of the motor.
 
 This offset is then used during normal operation to compute the electrical angle in radians as:
 
 \begin{equation}
-    \theta_e = \frac{2\pi}{2^{21}} \left( \theta_{m\_raw} \cdot p - \theta_{\text{offset}} \right)
+    \theta_e = \frac{2\pi}{2^{21}} \left( \theta_{\text{m\_raw}} \cdot p - \theta_{\text{offset}} \right)
 \end{equation}
 
 
@@ -282,7 +292,7 @@ and is a crucial input to the FOC algorithm.
 Once the calibration procedure is complete, the PWM outputs are returned to a neutral duty cycle and the ADC interrupt is re-enabled, restoring the standard control loop execution.
 The calibrated offset is then consistently applied during runtime, ensuring correct phase alignment required for stable FOC operation.
 
-\section{BLDC motor driver}
+\section{Gate motor driver}
 % https://www.ti.com/lit/ds/symlink/drv8316c.pdf?ts=1778069037563
 To control and measure currents in motor windings, a DRV8316C three-phase BLDC motor driver with built-in current sensing is used.
 The driver provides a configurable 6x or 3x PWM control scheme. 
@@ -302,7 +312,7 @@ This module encapsulates all low-level interactions with the motor driver, inclu
 It also provides an abstraction for current sensing and PWM generation,
 allowing the higher-level control logic to remain independent of the specific hardware implementation. 
 By isolating driver-specific functionality into a dedicated module, the firmware maintains a modular structure
-and can be more easily adapted to different motor drivers if required.
+and can be more easily adapted to different motor drivers if required. \cite{TI_DRV8316C}
 
 
 \subsection{PWM generation}
@@ -403,6 +413,80 @@ The calibration function averages the acquired ADC samples and stores the calcul
 into the \texttt{driver\_current\_offsets\_t} structure.
 
 
+\section{PI and PID regulators}
+
+Both PI and PID controllers are implemented in the \texttt{uFOC\_lib/pi\_controller} module.
+Each controller type defines its own data structure for storing controller parameters and internal state variables.
+Both controller implementations follow a consistent API naming convention.
+
+\subsection{PI controller}
+
+The PI controller is implemented using the \texttt{PIController} structure, which stores the controller gains, internal integration state, and output limitation parameters.
+
+The structure contains the following variables:
+\begin{itemize}
+    \item \texttt{float kp} -- proportional gain
+    \item \texttt{float ki} -- integral gain
+    \item \texttt{float integral} -- accumulated integral term
+    \item \texttt{float out\_max} -- maximum absolute output value
+\end{itemize}
+
+The controller is initialized using the \texttt{pi\_init()} function, which configures the proportional and integral gains together with the maximum allowed output value.
+During initialization, the internal integral accumulator is set to zero.
+
+The \texttt{pi\_update()} function performs one iteration of the PI control algorithm.
+The function receives the current control error together with the elapsed time step \texttt{dt}.
+First, the proportional term is computed directly from the current error.
+Then a new integral value is calculated by integrating the error over time.
+
+To prevent excessive integral accumulation during output saturation, an anti-windup mechanism is implemented.
+If the computed output exceeds the configured output limit, the output is clamped to the allowed range.
+The integral term is updated only when the current error would reduce the saturation state.
+This prevents uncontrolled growth of the integral component and improves regulator stability after saturation.
+
+The \texttt{pi\_set\_out\_max()} function allows modification of the maximum allowed controller output during runtime.
+The \texttt{pi\_reset()} function clears the internal integral accumulator and restores the controller state.
+
+\subsection{PID controller}
+
+The PID controller extends the PI controller by adding a derivative component.
+It is implemented using the \texttt{PIDController} structure.
+
+The structure contains the following variables:
+\begin{itemize}
+    \item \texttt{float kp} -- proportional gain
+    \item \texttt{float ki} -- integral gain
+    \item \texttt{float kd} -- derivative gain
+    \item \texttt{float integral} -- accumulated integral term
+    \item \texttt{float prev\_error} -- previous control error
+    \item \texttt{uint8\_t has\_prev\_error} -- flag indicating whether a valid previous error exists
+    \item \texttt{float out\_max} -- maximum absolute output value
+\end{itemize}
+
+The controller is initialized using the \texttt{pid\_init()} function, which configures all controller gains and initializes the internal state variables.
+The derivative term requires knowledge of the previous control error.
+For this reason, the controller stores both the previous error value and a flag indicating whether a valid previous error sample is available.
+
+The \texttt{pid\_update()} function performs one iteration of the PID control algorithm.
+The proportional and integral terms are calculated in the same way as in the PI controller.
+The derivative term is calculated as
+\begin{equation}
+    d = k_d \frac{e_t - e_{t-1}}{dt}~,
+\end{equation}
+
+where \(e_t\) is the current control error and \(e_{t-1}\) is the previous error value.
+
+The derivative term is only evaluated when a valid previous error sample exists and the time step is greater than zero.
+During the first controller iteration, the derivative component is therefore set to zero.
+
+Similarly to the PI controller, the PID implementation also includes output saturation and anti-windup protection.
+If the controller output exceeds the configured limit, the output is clamped while the integral term 
+is only updated when the control error reduces the saturation condition.
+
+The \texttt{pid\_set\_out\_max()} function allows runtime modification of the maximum controller output.
+The \texttt{pid\_reset()} function clears the integral accumulator, resets the stored previous error value, and invalidates the derivative history.
+
+
 
 \section{FOC implementation}
 The FOC module located in the \texttt{uFOC\_lib/foc} directory implements the mathematical core of the field-oriented control algorithm.
@@ -412,20 +496,25 @@ which are used for conversion between the three-phase stationary reference frame
 The module also implements space vector PWM modulation through the \texttt{svpwm()} function,
 which converts the calculated phase voltage commands into normalized PWM duty cycles suitable for motor control.
 
-To reduce the computational cost of trigonometric operations, sine and cosine functions are implemented using a lookup table with linear interpolation.
+To reduce the computational cost of trigonometric operations, sine and cosine functions are implemented using a lookup table with linear interpolation. \cite{TrigonometricFuncitonOptimization}
 Compared to standard floating-point implementations from the \texttt{math.h} library, this approach significantly reduces control loop execution time.
 
 The main FOC algorithm is encapsulated in the \texttt{foc\_compute\_voltages()} function,
 which performs coordinate transformations, current control calculations, and generation of output voltage commands.
 
-\subsection{Park Clarke}
+\subsection{Clarke and Park transformations}
+The Clarke and Park transformations are implemented by the \texttt{clarke\_transform()} and \texttt{park\_transform()} functions.
+Their inverse transformations are implemented by the \texttt{inv\_clarke\_transform()} and \texttt{inv\_park\_transform()} functions.
 
+Optimizations were implemented in the Park and inverse Park transformations by using a precomputed look-up table for trigonometric functions.
+This optimization is further described in Chapter~\ref{trigonometric_optimitaion}.
 
 
 \subsection{Trigonometric functions optimization}
+\label{trigonometric_optimitaion}
 Trigonometric functions, namely sine and cosine, are used in the Park and inverse Park transformations.
 To reduce the computational cost and improve the execution speed of the FOC algorithm,
-a lookup table with linear interpolation was implemented for sine and cosine evaluation.
+a lookup table with linear interpolation was implemented for sine and cosine evaluation. \cite{TrigonometricFuncitonOptimization}
 
 During firmware initialization, the lookup table is generated using the \texttt{init\_sin\_table()} function.
 The number of samples stored in the lookup table is determined by the \texttt{SIN\_TABLE\_SIZE} constant defined in \texttt{foc.c}.
@@ -449,7 +538,10 @@ To improve accuracy, linear interpolation between neighbouring lookup table samp
 Compared to repeated evaluation of the standard \texttt{math.h} trigonometric functions,
 this approach significantly reduces execution time and improves determinism of the real time control loop.
 
-\subsection{FOC current control loop}
+\subsection{FOC torque control loop}
+In Field Oriented Control of a PMSM, the electromagnetic torque is directly proportional to the quadrature-axis current component $i_q$. \cite{prayogo_foc}
+Therefore, the implemented firmware primarily referes to toqrue control loop as current control loop.
+
 The FOC current control loop is executed inside the \texttt{HAL\_ADCEx\_InjectedConvCpltCallback()} callback function,
 which is triggered after completion of the timer synchronized injected ADC conversion.
 This approach ensures deterministic execution timing and proper synchronization between current sampling and PWM generation.
@@ -480,7 +572,7 @@ Finally, the calculated PWM duty cycles are normalized with respect to \texttt{V
 and applied to the motor driver using the \texttt{pwm\_set()} function.
 
 \subsection{Velocity and position control loops}
-In addition to the inner FOC current control loop, the firmware also implements higher level velocity and position control loops.
+In addition to the inner FOC toqrue control loop, the firmware also implements higher level velocity and position control loops.
 These control loops are implemented as cascaded controllers, where the output of the higher level controller serves as the reference input for the lower level controller.
 
 Unlike the current control loop, which is synchronized with PWM generation and ADC sampling,
@@ -698,23 +790,79 @@ into the internal rotation representation used throughout the firmware.
 These conversion functions are automatically used by all setter and getter functions working with angle values, namely position and angular velocty.
 As a result, the internal firmware implementation remains fully independent of the externally selected user units.
 
+\section{CAN communication}
+CAN communication is implemented in the \texttt{uFOC\_lib/communication} module.
+The module provides an interface between external client connected to the CAN bus and the internal firmware configuration layer.
+It allows an external controller to change the active control mode, update reference values, modify controller parameters, read selected feedback values, and execute encoder calibration.
 
-% \section{CAN communication}
-% \section{CAN client example}
+The communication module is divided into two main parts.
+The first part consists of \texttt{communication.h} and \texttt{communication.c}, which implement the low-level CAN interface.
+This includes CAN initialization, filter configuration, message transmission, message reception, and buffering of the last received frame.
 
+The second part consists of \texttt{commands.h} and \texttt{commands.c}, which implement the command layer.
+This layer translates received CAN commands into calls of setter and getter functions from the \texttt{config} module.
 
-% \chapter{Testing and results}
-% \chapter{Future improvements}
+A simple CAN message frame format is used.
+The first data byte contains the target device identifier, the second byte contains the command identifier, and the remaining bytes contain the command payload.
+This allows multiple uFOC drivers to share the same CAN bus while still being addressed independently.
 
+\subsection{CAN communication in general}
+The low-level CAN communication layer is implemented in \texttt{communication.c}.
+Before the CAN peripheral can be used, the function \texttt{communication\_init()} is called with a pointer to the HAL CAN handle.
+This function stores the CAN handle internally and clears the receive buffer.
 
+The CAN peripheral is started using the \texttt{communication\_start()} function.
+This function first configures the CAN acceptance filter and then starts the CAN peripheral using \texttt{HAL\_CAN\_Start()}.
+After that, the RX FIFO 0 pending message interrupt is enabled using \texttt{HAL\_CAN\_ActivateNotification()}.
+The implemented filter accepts all incoming messages, while the actual device addressing is handled later in software by checking the device ID stored in the message payload.
 
+Messages are transmitted using the \texttt{communication\_send()} function.
+This function creates a standard CAN data frame, sets the standard arbitration identifier, configures the data length code, and sends the message using \texttt{HAL\_CAN\_AddTxMessage()}.
+Only standard CAN identifiers are used in this implementation.
 
+Received messages are processed in the CAN receive interrupt callback.
+When a new message is available in RX FIFO 0, the function \texttt{communication\_rx\_fifo0\_pending\_callback()} reads the message using \texttt{HAL\_CAN\_GetRxMessage()} 
+and stores it into an internal \texttt{can\_message\_t} structure.
+This structure contains the message identifier, data length, data bytes, and flags specifying whether the frame uses an extended identifier or a remote frame.
 
+The function \texttt{communication\_message\_available()} can be used to check whether a new message has been received.
+The function \texttt{communication\_read()} receives a pointer to \texttt{can\_message\_t} structure and copies the received message from the internal buffer into the structure.
+Interrupts are temporarily disabled during this copy operation to prevent the receive buffer from being modified while it is being read.
 
+\subsection{Command handling}
 
+The command layer is implemented in \texttt{commands.c}.
+Its purpose is to parse received data and translate CAN commands into calls of the configuration abstraction layer.
+This keeps the communication code separated from the internal implementation of control variables and controller parameters.
 
+To execute received CAN commands, the \texttt{handle\_communication()} function was implemented.
+This function first reads the first byte of the data payload and compares it with the local device ID to determine whether the current device is the target recipient.
+If the IDs do not match, the command is ignored.
 
+The second byte of the payload is then interpreted as the command identifier.
+The command identifiers are defined in \texttt{commands.h}.
+A \texttt{switch} statement is subsequently used to execute the corresponding command handler.
 
+The implemented commands can be divided into setter commands, getter commands.
+
+Setter commands first call the \texttt{get\_float\_value\_from\_message()} helper function with a pointer to the \texttt{can\_message\_t} structure.
+This function extracts bytes 2--5 from the CAN payload and converts them into a floating point value.
+The parsed value is then passed to the corresponding setter function implemented in the \texttt{config.c} module.
+
+Getter commands first call the corresponding getter function from the \texttt{config.c} module.
+The returned value is then passed to the \texttt{assemble\_data\_with\_float\_value()} helper function, which assembles a CAN response frame.
+This function sets the first payload byte to \texttt{CAN\_COMMUNICATION\_DEVICE\_ID}, the second byte to the corresponding command identifier, 
+and fills bytes 2--5 with the requested floating point value. 
+After the response message is assembled, the \texttt{communication\_send()} function is called to transmit the response back to the client via the CAN bus.
+
+The only exception is the \texttt{GET\_USER\_ANGLE\_UNITS} command, which does not return a floating point value but an \texttt{AngleUnits} enumeration value.
+For this reason, a custom message assembly procedure was implemented specifically for this command.
+
+\section{CAN client example}
+An example python client was implemented in \texttt{pytools/ufoc\_client.py} using pycan library.
+This python module implemnets a \texttt{uFOCclient} class... jada jada  
+
+The \texttt{ufoc\_client.py} was used mainly for testing purposes.
 
 
 

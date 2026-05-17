@@ -1,3 +1,66 @@
-\begin{thebibliography}{}
+\begin{thebibliography}{10}
+
+\bibitem{block_diagram_foc}
+Vladislav Bida, Dmitriy Samokhvalov, and Fuad Al-Mahturi.
+\newblock Pmsm vector control techniques — a survey.
+\newblock pages 577--581, 01 2018.
+
+\bibitem{prayogo_foc}
+Rofiq Cahyo, Aris Triwiyatno, and Munawar Riyadi.
+\newblock Field oriented control implementation on bldc motor controller with pi and svpwm using stm32f103c8t6.
+\newblock {\em Journal of Physics: Conference Series}, 2622:012025, 10 2023.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{ewma}
+{Corporate Finance Institute}.
+\newblock Exponentially weighted moving average (ewma), 2024.
+\newblock [Online; accessed 2026-05-16].
+
+\bibitem{gm4108}
+{iFlight}.
+\newblock ipower gm4108h-120t gimbal motor, 2026.
+\newblock [Online; accessed 16-May-2026].
+
+\bibitem{ben_katz}
+Benjamin Katz.
+\newblock {\em A low cost modular actuator for dynamic robots}.
+\newblock PhD thesis, 01 2018.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{TrigonometricFuncitonOptimization}
+Gabriele Magnani, Daniele Cattaneo, Michele Chiari, and Giovanni Agosta.
+\newblock {The Impact of Precision Tuning on Embedded Systems Performance: A Case Study on Field-Oriented Control}.
+\newblock In Jo\~{a}o Bispo, Stefano Cherubin, and Jos\'{e} Flich, editors, {\em 12th Workshop on Parallel Programming and Run-Time Management Techniques for Many-core Architectures and 10th Workshop on Design Tools and Architectures for Multicore Embedded Computing Platforms (PARMA-DITAM 2021)}, volume~88 of {\em Open Access Series in Informatics (OASIcs)}, pages 3:1--3:13, Dagstuhl, Germany, 2021. Schloss Dagstuhl -- Leibniz-Zentrum f{\"u}r Informatik.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{svpwm_efficiency}
+{Microchip Technology Inc.}
+\newblock Space vector pulse width modulation, 2024.
+\newblock [Online; accessed 16-May-2026].
+
+\bibitem{moteus_c1}
+{mjbots}.
+\newblock moteus-c1 brushless servo controller, 2026.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{odrive_micro}
+{ODrive Robotics}.
+\newblock Odrive micro, 2026.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{datasheet_MT6835}
+Shanghai MagnTek Microelectronics Inc.
+\newblock {\em 21-Bit High Accuracy Magnetic Angle Encoder IC}, 12 2022.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{SimpleFOC}
+Antun Skuric, Hasan~Sinan Bank, Richard Unger, Owen Williams, and David González-Reyes.
+\newblock Simplefoc: A field oriented control (foc) library for controlling brushless direct current (bldc) and stepper motors.
+\newblock {\em Journal of Open Source Software}, 7(74):4232, 2022.
+\newblock [Online; accessed 15-May-2026].
+
+\bibitem{uFOC}
+Bc. Šimon Pecháček.
+\newblock ufoc hardware, 2025.
 
 \end{thebibliography}

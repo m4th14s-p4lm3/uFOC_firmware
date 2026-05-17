@@ -1,0 +1,94 @@
+\chapter{Testing and results}
+To verify the functionality of the developed firmware, the individual control loops were tested first after PI and PID controller tuning.
+Afterwards, a practical usage example was demonstrated using CAN communication between a Python client and two uFOC drivers connected in a daisy-chain configuration.
+
+For testing, two iPower GM4108 motors powered from a 20~V power supply were used.
+
+\section{Control loops testing}
+Testing of the individual control loops was performed by modifying the firmware main loop to periodically 
+transmit the reference and measured variables over UART, while CAN communication was used to update the target values in real time.
+
+\subsection{Torque loop testing}
+The current control loop was tested by changing the target torque current from 0~A to 0.4~A, then to 0.75~A, 
+and finally back to 0~A, while the motor shaft was physically blocked to allow the motor to generate maximum torque.
+
+During the test, the target flux current was set to zero.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figs/current_testing.pdf}
+    \caption{Torque control loop under load}
+    \label{fig:current_test}
+\end{figure}
+
+Figure~\ref{fig:current_test} shows both torque and flux current components together with their target and measured values.
+The measured torque current closely follows the commanded reference with minimal steady-state error and low noise.
+At the same time, the flux current regulator successfully maintains the flux current near zero, 
+with only brief transient deviations occurring during rapid changes of the torque current reference.
+
+The results demonstrate stable operation of the implemented FOC current control loop 
+and proper decoupling between the torque ($i_q$) and flux ($i_d$) current components.
+
+\subsection{Velocity loop testing}
+
+The velocity control loop was tested on an unloaded motor by changing the reference velocity from 0~rot/s to 4~rot/s, 
+then to -8~rot/s to demonstrate operation in the opposite direction, and finally to 18~rot/s.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figs/velocity_testing.pdf}
+    \caption{Velocity control}
+    \label{fig:velocity_test}
+\end{figure}
+
+According to the manufacturer, the used GM4108 motor should achieve approximately 513--567~RPM, corresponding to 8.55--9.45~rot/s \cite{gm4108}.
+However, testing showed that significantly higher rotational speeds could be achieved using the uFOC driver and the implemented FOC algorithm.
+
+Figure~\ref{fig:velocity_test} shows that the controller is able to accurately track the reference velocity within the nominal operating range of the motor, 
+including stable operation in both rotational directions.
+When operating above the rated motor speed, the controller was still able to accelerate the motor further, 
+but noticeable oscillations appeared in the measured velocity signal.
+These oscillations are likely caused by limitations of the motor mechanical design 
+and increased back-EMF at higher rotational speeds rather than instability of the control loop itself.
+
+The results demonstrate correct functionality of the velocity controller and successful integration of the cascaded velocity and current control loops.
+
+
+\subsection{Position loop testing}
+
+The position control loop was tested on an unloaded motor by changing the target position from 0 to 3 rotations, then to 6 rotations, and finally back to 3 rotations.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figs/position_testing.pdf}
+    \caption{Position control}
+    \label{fig:position_test}
+\end{figure}
+
+Figure~\ref{fig:position_test} demonstrates smooth and stable position tracking of the implemented controller.
+The measured position closely follows the target trajectory without significant steady-state error.
+A non-zero derivative gain of the PID controller was used to damp the system response and reduce overshoot during rapid position changes.
+
+The results confirm correct functionality of the cascaded position, velocity, and current control loops.
+
+\section{Testing of client communication in daisy-chain mode}
+
+To demonstrate a practical use case of the firmware, a simple mirror-mode example was implemented in \texttt{pytools/mirror\_mode.py}. 
+The example uses two uFOC drivers, each connected to an iPower GM4108 motor.
+
+The motors are connected in a daisy-chain CAN configuration. 
+Each firmware instance is compiled with a different CAN ID, and one of the drivers is connected to a computer through a Makerbase CANable interface.
+
+The Python script sets one motor to \texttt{NO\_CONTROL} mode and the other motor to \texttt{POSITION\_CONTROL} mode. 
+In a continuous loop, the Python client reads the position of the first motor and sets the target position of the second motor to the same value. 
+As a result, when the user manually moves the first motor, the second motor mirrors its motion.
+
+This demonstration verifies the functionality of the CAN communication interface, runtime control mode switching, sensor feedback reading, 
+and target position updating from the Python client. It also demonstrates that multiple uFOC drivers can share a single CAN bus in a daisy-chain configuration.
+
+*add video reference*
+
+
+
+
+
