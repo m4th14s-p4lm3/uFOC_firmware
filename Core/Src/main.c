@@ -121,8 +121,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
     // ---- < Velocity PI control > ----
     if (config.control_state >= VELOCITY_CONTROL){
-      float velocity_rpm = get_angular_velocity(&config.encoder);
-      float error_w = config.angular_velocity_target - velocity_rpm;
+      float velocity = get_angular_velocity(&config.encoder);
+      float error_w = config.angular_velocity_target - velocity;
       config.torque_current_target = pi_update(&config.regulators.pi_angular_velocity, error_w, dt);
     }
 
@@ -305,21 +305,11 @@ int main(void)
   while (1){
     // handle_communication(&config);
 
-    // char buffer[128];
-    // handle_communication();
-    // float velocity_rpm = get_velocity_moving_average(&config.encoder) * 9.55741f;
-    // float position = -encoder_get_turns(&config.encoder);
-    
-    
-    
-    
-    // PRINT THIS DATA
-    float velocity_rpm = config.encoder.angular_velocity_ewma * 9.55741f;
     
     // sprintf(buffer, "%d\r\n", config.encoder.current_raw_value);
-    sprintf(buffer, "%f %f %f %f\r\n", config.angular_velocity_target, get_angular_velocity(&config.encoder));
+    sprintf(buffer, "%f %f\r\n", config.angular_velocity_target, get_angular_velocity(&config.encoder));
     print(buffer);
-    HAL_Delay(10);
+    // HAL_Delay(10);
 
     // Timer frequency check
     // uint32_t now = HAL_GetTick();

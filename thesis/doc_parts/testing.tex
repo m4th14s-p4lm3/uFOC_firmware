@@ -46,10 +46,7 @@ However, testing showed that significantly higher rotational speeds could be ach
 
 Figure~\ref{fig:velocity_test} shows that the controller is able to accurately track the reference velocity within the nominal operating range of the motor, 
 including stable operation in both rotational directions.
-When operating above the rated motor speed, the controller was still able to accelerate the motor further, 
-but noticeable oscillations appeared in the measured velocity signal.
-These oscillations are likely caused by limitations of the motor mechanical design 
-and increased back-EMF at higher rotational speeds rather than instability of the control loop itself.
+When operating above the rated motor speed, the controller was still able to accelerate the motor further, reaching almost double the rated speed.
 
 The results demonstrate correct functionality of the velocity controller and successful integration of the cascaded velocity and current control loops.
 

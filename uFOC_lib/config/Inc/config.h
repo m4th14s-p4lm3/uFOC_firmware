@@ -11,7 +11,7 @@
 // Currents units are always ampers
 
 
-#define CAN_COMMUNICATION_DEVICE_ID 0x01 // Device ID for CAN daisy chaining
+#define CAN_COMMUNICATION_DEVICE_ID 0x00 // Device ID for CAN daisy chaining
 #define CAN_COMMUNICATION_STD_ID 0x123
 
 #define DEFAULT_USER_UNITS ROTATIONS // Choose from enum AngleUnits

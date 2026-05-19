@@ -225,7 +225,7 @@ configured motor direction.
 
 \subsection{EWMA filter}
 
-The exponentially weighted moving average (EWMA) is used in this implementation to filter noisy angle and angular velocity measurements.
+The Exponentially Weighted Moving Average (EWMA) is used in this implementation to filter noisy angle and angular velocity measurements.
 EWMA was chosen due to its low memory and computational requirements. Unlike a moving average, which requires storing \texttt{n} previous
 time series values, EWMA requires storing only one value. This value is then used to compute the new EWMA value and is subsequently overwritten.
 Therefore, EWMA represents a lightweight method for filtering signals on an embedded device with limited resources.
