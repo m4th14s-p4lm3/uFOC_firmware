@@ -796,12 +796,22 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, DRIVER_CS_Pin|ENCODER_CS_Pin|IMU_CS_Pin, GPIO_PIN_SET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(PA15_LOW_GPIO_Port, PA15_LOW_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pins : DRIVER_CS_Pin ENCODER_CS_Pin IMU_CS_Pin */
   GPIO_InitStruct.Pin = DRIVER_CS_Pin|ENCODER_CS_Pin|IMU_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA15_LOW_Pin */
+  GPIO_InitStruct.Pin = PA15_LOW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(PA15_LOW_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

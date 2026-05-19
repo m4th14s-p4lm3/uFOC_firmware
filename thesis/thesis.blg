@@ -1,4 +1,4 @@
-This is BibTeX, Version 0.99e (TeX Live 2026/Homebrew)
+This is BibTeX, Version 0.99e (TeX Live 2026)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: thesis.aux
 The style file: plain.bst
@@ -11,47 +11,49 @@ Warning--entry type for "ewma" isn't style-file defined
 --line 125 of file biblio_files/biblio_basic.bib
 Warning--entry type for "electrical_offset" isn't style-file defined
 --line 163 of file biblio_files/biblio_basic.bib
+Warning--entry type for "klipper_resonance" isn't style-file defined
+--line 191 of file biblio_files/biblio_basic.bib
 Warning--empty booktitle in block_diagram_foc
 Warning--empty school in ben_katz
-You've used 16 entries,
+You've used 19 entries,
             2118 wiz_defined-function locations,
-            584 strings with 6418 characters,
-and the built_in function-call counts, 4233 in all, are:
-= -- 407
-> -- 170
-< -- 3
-+ -- 70
-- -- 53
-* -- 230
-:= -- 696
-add.period$ -- 53
-call.type$ -- 16
-change.case$ -- 72
+            599 strings with 6901 characters,
+and the built_in function-call counts, 4998 in all, are:
+= -- 479
+> -- 208
+< -- 4
++ -- 85
+- -- 65
+* -- 267
+:= -- 831
+add.period$ -- 64
+call.type$ -- 19
+change.case$ -- 87
 chr.to.int$ -- 0
-cite$ -- 18
-duplicate$ -- 156
-empty$ -- 377
-format.name$ -- 53
-if$ -- 909
+cite$ -- 21
+duplicate$ -- 186
+empty$ -- 442
+format.name$ -- 65
+if$ -- 1069
 int.to.chr$ -- 0
-int.to.str$ -- 16
-missing$ -- 4
-newline$ -- 87
-num.names$ -- 30
-pop$ -- 112
+int.to.str$ -- 19
+missing$ -- 5
+newline$ -- 104
+num.names$ -- 36
+pop$ -- 133
 preamble$ -- 1
-purify$ -- 59
+purify$ -- 71
 quote$ -- 0
-skip$ -- 130
+skip$ -- 150
 stack$ -- 0
-substring$ -- 176
-swap$ -- 36
-text.length$ -- 3
+substring$ -- 191
+swap$ -- 40
+text.length$ -- 4
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 64
+type$ -- 76
 warning$ -- 2
-while$ -- 36
-width$ -- 18
-write$ -- 176
-(There were 6 warnings)
+while$ -- 42
+width$ -- 21
+write$ -- 211
+(There were 7 warnings)

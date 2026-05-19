@@ -6,7 +6,7 @@
 #include "driver.h"
 #include "config.h"
 
-#define ANGULAR_VELOCITY_EWMA_ALPHA 0.05f
+#define ANGULAR_VELOCITY_EWMA_ALPHA 1.0f
 #define ANGLE_VALUE_EWMA_ALPHA  0.8f
 #define SAMPLE_DT 1.0f/8888.0f
 
@@ -136,11 +136,8 @@ void update_encoder(encoder_t* encoder){
     
 
 
-    int64_t mech_raw_i = encoder->position_ticks % (int64_t)ENC_MODULO;
-    if (mech_raw_i < 0) {
-        mech_raw_i += (int64_t)ENC_MODULO;
-    }
-
+    // int64_t mech_raw_i = encoder->position_ticks % (int64_t)ENC_MODULO;
+    int64_t mech_raw_i = encoder->current_raw_value;
 
     int64_t mech_elec_raw_i = (mech_raw_i * (int64_t)encoder->magnetic_pole_pairs)
                               % (int64_t)ENC_MODULO;

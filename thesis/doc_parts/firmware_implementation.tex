@@ -189,7 +189,7 @@ containing \texttt{ANGLE[20:13]}, \texttt{ANGLE[12:5]} and \texttt{ANGLE[4:0]}.
 
 The encoder frame also contains status bits and an 8-bit CRC value. The module implements CRC-8 verification using a polynomial of \texttt{0x07} 
 and an initial value of \texttt{0x00}. If the CRC check fails, the error counter \texttt{crc\_error\_count} 
-is incremented and the last valid encoder value is reused. This prevents corrupted SPI measurements from directly affecting the control loop.
+is incremented and the last valid encoder value is reused. This prevents corrupted SPI measurements from directly affecting the control loop. \cite{datasheet_MT6835}
 
 \subsection{Position update and overflow handling}
 The encoder state is updated by calling \texttt{update\_encoder()}. 
@@ -197,7 +197,7 @@ This function reads a new raw position value, verifies its CRC and computes the 
 
 Because the encoder position is cyclic, the difference calculation must handle overflow at the end of the 21-bit range. 
 If the measured difference is larger than half of the encoder modulo, the function assumes that the position crossed the overflow boundary
- and corrects the delta accordingly. The corrected delta is then accumulated into \texttt{position\_ticks}.
+and corrects the delta accordingly. The corrected delta is then accumulated into \texttt{position\_ticks}.
 
 This approach makes it possible to track continuous mechanical position over multiple revolutions while still using an absolute single-turn encoder.
 
@@ -350,7 +350,7 @@ The driver registers are then unlocked and the required configuration values are
 The \texttt{CTRL2} register is configured to clear existing fault flags, select the 6 PWM control mode, 
 set the output slew rate to 50~V/$\mu$s and enable the SDO mode required for SPI readback. 
 The \texttt{CTRL5} register is used to configure the gain of the integrated current sense amplifiers according 
-to the selected \texttt{drv8316\_csa\_gain\_t} value. 
+to the selected \texttt{drv8316\_csa\_gain\_t} value. \cite{datasheet_DRV8316C}
 
 This value is passed as an argument to the \texttt{drv8316\_init()} function and
 should be selected by the user based on the used motor and expected current draw.
@@ -806,8 +806,8 @@ A simple CAN message frame format is used.
 The first data byte contains the target device identifier, the second byte contains the command identifier, and the remaining bytes contain the command payload.
 This allows multiple uFOC drivers to share the same CAN bus while still being addressed independently.
 
-\subsection{CAN communication in general}
-The low-level CAN communication layer is implemented in \texttt{communication.c}.
+\subsection{CAN communication implementation}
+The low level CAN communication layer is implemented in \texttt{communication.c}.
 Before the CAN peripheral can be used, the function \texttt{communication\_init()} is called with a pointer to the HAL CAN handle.
 This function stores the CAN handle internally and clears the receive buffer.
 

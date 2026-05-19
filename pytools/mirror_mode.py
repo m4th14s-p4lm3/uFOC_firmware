@@ -14,6 +14,7 @@ client_slave = uFOCclient(
 )
 
 client_slave.set_control_state(3)
+time.sleep(0.0001)
 client_master.set_control_state(0)
 
 

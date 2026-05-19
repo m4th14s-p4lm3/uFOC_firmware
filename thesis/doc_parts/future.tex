@@ -1,20 +1,95 @@
 \chapter{Future improvements}
- 
+While it was demonstrated that the uFOC firmware correctly implemented the FOC algorithm, 
+multiple improvements are planned for future firmware iterations.
 
-Encoder prediction for faster FOC loop
+\section{Execution time of torque control loop}
+Execution speed of the torque control loop directly affects the maximum achievable motor speed and overall control bandwidth.
+The current implementation operates at a maximum stable frequency of approximately 8.9~kHz, which was sufficient for the tested operating conditions.
+However, several optimizations are proposed for future firmware revisions in order to potentially achieve up to twice the current execution speed.
 
-Encoder excentricity calibration
+\subsection{Encoder reading limitations}
+The main limitation of the current torque control loop execution time is the SPI communication
+with the encoder and processing performed inside the ADC callback interrupt.
+Measurements showed that the torque loop itself can operate at frequencies up to approximately 20~kHz 
+when encoder communication and processing are removed.
+However, with encoder updates enabled, the maximum stable loop frequency was measured to be approximately 8.9~kHz.
+
+A possible improvement would be to execute the \texttt{encoder\_update()} function in a 
+separate interrupt running at a lower frequency than the torque control loop.
+To maintain accurate rotor position estimation for the FOC algorithm, 
+electrical angle prediction could be implemented using the previously measured 
+electrical angular velocity together with the elapsed time since the last encoder measurement.
+
+Such an approach could significantly reduce the execution time of the main torque control loop
+while preserving sufficient angle estimation accuracy for stable motor control.
+
+\subsection{Current sampling optimization}
+Current sampling could also be further optimized. In the current implementation, currents of all three motor phases are measured independently.
+However, according to Kirchhoff's current law, the sum of all three phase currents in a balanced three-phase system is equal to zero,
+
+\begin{equation}
+    i_a + i_b + i_c = 0 
+\end{equation}
+
+Therefore, only two phase currents need to be measured directly, while the third current can be calculated from the remaining two currents. \cite{kirchhoff}
+This approach could reduce ADC processing overhead, potentially allowing higher control loop frequencies.
 
 
-Developer feedback
+\section{Encoder excentricity calibration}
+The accuracy of encoder angle measurement depends on how precisely the diametrically magnetized magnet is attached to the motor shaft,
+as well as how accurately the center of rotation is aligned with the physical encoder sensing element.
+Incorrect alignment may introduce angle measurement errors caused by magnet eccentricity and off-axis misalignment.
+
+The MT6835 encoder includes multiple built-in calibration mechanisms intended to compensate for these errors and improve angular measurement linearity.
+According to the datasheet, the encoder supports factory calibration, user auto-calibration and user non-linearity compensation (NLC) calibration~\cite{datasheet_MT6835}. 
+The user auto-calibration mode allows the encoder to automatically calculate compensation coefficients for a specific magnetic field configuration and assembly condition,
+reducing the integral non-linearity (INL) error to typically less than $\pm0.07^\circ$~\cite{datasheet_MT6835}. 
+For even higher precision applications, the encoder also provides a 256-point lookup-table based Non-Linearity Compensation (NLC) calibration mode.
+
+\section{Anticogging}
+Cogging torque is an undesirable effect commonly present in low cost BLDC and PMSM motors, caused by the interaction between permanent rotor magnets and stator teeth.
+This effect introduces periodic torque ripple, especially noticeable at low rotational speeds, resulting in non smooth motion and degraded position control accuracy.
+
+Two common approaches are used to reduce cogging effects.
+The first approach involves mechanical and electromagnetic motor design optimizations, such as skewed stator laminations or optimized magnet geometry.
+However, these solutions generally increase manufacturing complexity and cost.
+
+The second approach utilizes software based calibration and compensation methods.
+These methods estimate periodic torque disturbances over one mechanical revolution and apply compensation torque during operation.
+According to researchers at Modlab UPenn~\cite{anticogging}, actuator cost and torque smoothness are often inversely related, 
+meaning that low cost actuators typically exhibit larger torque ripple and cogging effects.
+Therefore, software anticogging compensation can significantly improve smoothness of motion even on inexpensive actuators.
+
+For this reason, implementation of anticogging calibration and compensation is proposed as a future firmware improvement.
 
 
-Anti cogging
+\section{Multi-motor path synchronization}
+The current implementation allows communication with multiple motor drivers over a shared CAN bus line.
+However, individual drivers currently operate independently without synchronized trajectory execution.
 
-Multi motor path synchronization
-Dirrect can communication between devices - no client side
+Path synchronization is a desirable feature for applications involving kinematic systems with multiple degrees of freedom,
+where coordinated motion between multiple actuators is required.
+For example, in applications such as 3D printers, CNC machines or robotic manipulators,
+unsynchronized actuator movement could result in trajectory distortion, where a commanded straight line motion may instead produce a curved path.
 
+Therefore, implementation of multi axis trajectory synchronization is proposed as a future improvement.
+Synchronization could be implemented either on the client side by distributing time aligned commands,
+or preferably directly between motor drivers using CAN bus communication for deterministic coordinated motion control.
 
-Combined commands
+\section{IMU support}
+The uFOC hardware design includes an onboard IMU sensor, however IMU support has not yet been implemented in the firmware.
+The primary reason is the shared SPI bus configuration with the encoder,
+which complicates deterministic high speed communication required by the torque control loop.
 
-IMU support
+Nevertheless, IMU integration is considered an important future improvement.
+Availability of inertial measurements could enable advanced features such as orientation estimation,
+vibration analysis or resonance compensation techniques such as input shaping used in modern 3D printers~\cite{klipper_resonance}.
+
+\section{Developer feedback}
+The firmware has not yet been tested by external developers or users.
+Therefore, collecting developer feedback is considered an important future step in the firmware development process.
+
+Practical usage by additional developers could reveal usability issues, undocumented edge cases, missing functionality,
+or opportunities for further optimization and API improvements.
+Feedback gathered from real world applications may also help prioritize future 
+development directions and improve overall firmware robustness and maintainability.

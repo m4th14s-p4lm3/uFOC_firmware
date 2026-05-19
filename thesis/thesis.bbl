@@ -27,6 +27,11 @@ Benjamin Katz.
 \newblock PhD thesis, 01 2018.
 \newblock [Online; accessed 15-May-2026].
 
+\bibitem{klipper_resonance}
+{Klipper Project}.
+\newblock Resonance compensation, 2026.
+\newblock [Online; accessed 18-May-2026].
+
 \bibitem{TrigonometricFuncitonOptimization}
 Gabriele Magnani, Daniele Cattaneo, Michele Chiari, and Giovanni Agosta.
 \newblock {The Impact of Precision Tuning on Embedded Systems Performance: A Case Study on Field-Oriented Control}.
@@ -79,6 +84,18 @@ Antun Skuric, Hasan~Sinan Bank, Richard Unger, Owen Williams, and David Gonzále
 Texas Instruments.
 \newblock {\em DRV8316C Three-Phase Integrated FET Motor Driver}, 10 2025.
 \newblock [Online; accessed 15-May-2026].
+
+\bibitem{kirchhoff}
+Daniel Torres and Jorge Zambada.
+\newblock Single-shunt three-phase current reconstruction algorithm for sensorless foc of a pmsm.
+\newblock Technical Report AN1299, Microchip Technology Inc., 2009.
+\newblock [Online; accessed 18-May-2026].
+
+\bibitem{anticogging}
+Patrick~M. Wensing, Sangbae Kim, and David~E. Orin.
+\newblock Linear matrix inequalities for physically consistent inertial parameter identification: A statistical perspective on the mass distribution.
+\newblock In {\em Robotics: Science and Systems X}, 2014.
+\newblock [Online; accessed 18-May-2026].
 
 \bibitem{uFOC}
 Bc. Šimon Pecháček.

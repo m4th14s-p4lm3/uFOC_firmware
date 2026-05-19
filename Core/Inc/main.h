@@ -83,6 +83,8 @@ void Error_Handler(void);
 #define INHB_GPIO_Port GPIOA
 #define INHA_Pin GPIO_PIN_10
 #define INHA_GPIO_Port GPIOA
+#define PA15_LOW_Pin GPIO_PIN_15
+#define PA15_LOW_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

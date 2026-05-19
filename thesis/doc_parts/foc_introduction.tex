@@ -21,7 +21,7 @@ Three phase stator currents are first projected from the $(a,b,c)$ coordinate sy
 The stationary vectors are then rotated by the electrical rotor angle $\theta_e$ into the rotating $(d,q)$ reference frame using Park transformation.
 This decomposition allows independent control of flux current $i_d$ and torque current $i_q$.
 
-To control $i_d$ and $i_q$ currents, two independent proportional-integral (PI) controllers are used to update applied voltage to the stator windings based on the error between the reference and the measured currents.
+To control $i_d$ and $i_q$ currents, two independent proportionalintegral (PI) controllers are used to update applied voltage to the stator windings based on the error between the reference and the measured currents.
 In this implementation only the $i_q$ current reference is changed to control the torque, while the $i_d$ current reference is always set to zero to maximize the torque per ampere.
 
 After getting new voltage references from the PI controllers, they need to be transformed back to three phase voltages using inverse Park and inverse Clarke transformations,

@@ -1,1 +1,31 @@
-\chapter{Conclusion}\label{chap:conclusion}
+\chapter{Conclusion}
+
+The goal of this thesis was to implement Field Oriented Control firmware on STM-32 type microcontroller for an existing uFOC motor driver 
+developed by the Department of Control Engineering at the Czech Technical University in Prague.
+
+The high level goal of the uFOC project is to develop a compact integrated servo actuator inspired by the modular actuator architecture pioneered by Benjamin Katz at MIT. \cite{ben_katz}
+The concept combines motor driver electronics, sensing, communication interfaces and closed loop motor control into a compact device directly mountable onto the motor assembly. 
+Such integration reduces external wiring complexity and enables development of low cost modular actuators suitable for robotics and other mechatronic applications.
+
+The implemented firmware provides software modules for communication with peripherals such as the DRV8316C gate driver and the MT6835 magnetic encoder, 
+as well as torque, velocity and position control loops based on the Field Oriented Control principle with emphasis on deterministic behaviour.
+
+The firmware also implements CAN bus communication together with a client side Python interface.
+The communication protocol supports device identification, allowing multiple drivers to share a single CAN bus line in a daisy chain configuration. 
+The implemented command interface allows modification of control targets, PI and PID controller constants, 
+software limits and reading of processed sensor data and runtime state variables.
+
+The first part of this thesis provided a brief overview of the theoretical principles required for implementation of FOC control, 
+including Clarke and Park transformations, Space Vector PWM modulation and cascaded current, velocity and position control loops.
+
+The second part of this thesis described the practical firmware implementation in detail, including firmware architecture, MCU and peripheral configuration, 
+encoder processing, current sensing, implementation of PI and PID regulators, practical realization of the FOC algorithm and CAN communication handling.
+
+Experimental testing confirmed correct operation of the implemented torque, velocity and position control loops on the iPower GM4108 motor. 
+The firmware demonstrated stable torque regulation, accurate velocity tracking and smooth position control. 
+Communication between multiple drivers connected through a shared CAN bus was also successfully demonstrated.
+
+The developed firmware fulfills the goals defined in the thesis assignment and provides a functional embedded
+FOC control platform suitable for further development and experimental applications. 
+Several future improvements were proposed, including optimization of the torque control loop execution time, 
+encoder calibration improvements, anticogging compensation, synchronized multi-axis control and IMU integration.
