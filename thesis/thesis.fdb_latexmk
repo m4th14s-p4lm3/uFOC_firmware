@@ -1,14 +1,14 @@
 # Fdb version 4
-["bibtex thesis"] 1779222581.44273 "thesis.aux" "thesis.bbl" "thesis" 1779223005.74069 0
+["bibtex thesis"] 1779222581.44273 "thesis.aux" "thesis.bbl" "thesis" 1779282553.60655 0
   "./biblio_files/biblio_basic.bib" 1779138098 7039 3c53df58b1067e7d7a06307f6f88a82c ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/bibtex/bst/base/plain.bst" 1772380719 20613 bd3fbfa9f64872b81ac57a0dd2ed855f ""
-  "thesis.aux" 1779223005.54401 14072 a44d9950a41eb565ed8b0a697c1eb351 "pdflatex"
+  "thesis.aux" 1779282553.41153 14072 a44d9950a41eb565ed8b0a697c1eb351 "pdflatex"
   (generated)
   "thesis.bbl"
   "thesis.blg"
   (rewritten before read)
-["pdflatex"] 1779223003.90684 "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" "thesis.pdf" "thesis" 1779223005.7408 0
-  "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" 1779222579.49229 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
+["pdflatex"] 1779282551.83418 "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" "thesis.pdf" "thesis" 1779282553.60666 0
+  "/Users/mathiaspalme/Desktop/bakalarka_clean/uFOC_firmware/thesis/thesis.tex" 1779282551.37908 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1772380719 2971 def0b6c1f0b107b3b936def894055589 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1772380719 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/opt/homebrew/Cellar/texlive/20260301/share/texmf-dist/fonts/map/fontname/texfonts.map" 1772380719 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -242,19 +242,19 @@
   "doc_parts/testing.tex" 1779222784.96641 5061 5c0ec099e705d403afbd8ec68b3ab275 ""
   "figs/clarke_transformation.pdf" 1779132334 23771 c45736d180e2447d54479f0badddd19d ""
   "figs/curr_frame.png" 1779132337 1310123 25e6830d45df1c93c90523bfee607521 ""
-  "figs/current_testing.pdf" 1779132334 50049 240299310da9420068889b586220abeb ""
+  "figs/current_testing.pdf" 1779282515.43457 50035 42a64520808a2b87db7a0667532c7b79 ""
   "figs/foc_diagram.png" 1779132334 241197 69f2dac9717b045cd9f7643dcb003c55 ""
   "figs/park_transformation.pdf" 1779132334 19118 21eec7cd106ea8def679afc04d797b20 ""
-  "figs/position_testing.pdf" 1779132334 13447 fd4cf0a030dee960d1673e671d327462 ""
+  "figs/position_testing.pdf" 1779282364.06117 13463 5c9f8c013b4de7c53153abd44e4c5631 ""
   "figs/svpwm.pdf" 1779132334 16832 dd10da1490086493e4c7edd2e1dec34d ""
-  "figs/velocity_testing.pdf" 1779222531.45729 28797 e4347f3144131b6cbeb474119b299e71 ""
+  "figs/velocity_testing.pdf" 1779282321.3707 28824 870021c2d01b8de202a846605d416fb4 ""
   "pdf_input_files/assignment.pdf" 1779132337 1456485 ac06f7e071b6e06593cd37226a166ea8 ""
-  "thesis.aux" 1779223005.54401 14072 a44d9950a41eb565ed8b0a697c1eb351 "pdflatex"
+  "thesis.aux" 1779282553.41153 14072 a44d9950a41eb565ed8b0a697c1eb351 "pdflatex"
   "thesis.bbl" 1779222581.49397 4048 346bb56dc6f43b48d6a69c1bd83ad80d "bibtex thesis"
   "thesis.nls" 0 -1 0 ""
-  "thesis.out" 1779223005.54512 12086 df2ce229890be4364cc6a7706cb2695c "pdflatex"
-  "thesis.tex" 1779222579.49229 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
-  "thesis.toc" 1779223005.5453 6015 a6c6eaf7c22cfe721327efd33aca6eb3 "pdflatex"
+  "thesis.out" 1779282553.41257 12086 df2ce229890be4364cc6a7706cb2695c "pdflatex"
+  "thesis.tex" 1779282551.37908 1720 6424127f3c62924cbaaa3a0aa8ae237e ""
+  "thesis.toc" 1779282553.41277 6015 a6c6eaf7c22cfe721327efd33aca6eb3 "pdflatex"
   (generated)
   "thesis.aux"
   "thesis.log"

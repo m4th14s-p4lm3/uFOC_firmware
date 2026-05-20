@@ -1,10 +1,6 @@
 #ifndef UFOC_DRIVER_H
 #define UFOC_DRIVER_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "stm32f3xx_hal.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -56,8 +52,6 @@ HAL_StatusTypeDef driver_current_calibrate_offsets(driver_current_offsets_t *off
                                                    uint16_t sample_count,
                                                    uint32_t inter_sample_delay_ms);
 
-#ifdef __cplusplus
-}
-#endif
+
 
 #endif /* UFOC_DRIVER_H */
